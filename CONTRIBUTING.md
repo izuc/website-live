@@ -1,219 +1,56 @@
-# Contribution Guidelines
+# Contributing to Website.Live
 
-Welcome! This guide provides all the details you need to contribute effectively to the project. Thank you for helping us make **bolt.diy** a better tool for developers worldwide. 💡
+We love your input! We want to make contributing to Website.Live as easy and transparent as possible, whether it's:
 
----
+- Reporting a bug
+- Discussing the current state of the code
+- Submitting a fix
+- Proposing new features
+- Becoming a maintainer
 
-## 📋 Table of Contents
+## Development Process
 
-1. [Code of Conduct](#code-of-conduct)  
-2. [How Can I Contribute?](#how-can-i-contribute)  
-3. [Pull Request Guidelines](#pull-request-guidelines)  
-4. [Coding Standards](#coding-standards)  
-5. [Development Setup](#development-setup)  
-6. [Testing](#testing)  
-7. [Deployment](#deployment)  
-8. [Docker Deployment](#docker-deployment)  
-9. [VS Code Dev Containers Integration](#vs-code-dev-containers-integration)  
+We use GitHub to host code, to track issues and feature requests, as well as accept pull requests.
 
----
+1. Fork the repo and create your branch from `main`.
+2. If you've added code that should be tested, add tests.
+3. If you've changed APIs, update the documentation.
+4. Ensure the test suite passes.
+5. Make sure your code lints.
+6. Issue that pull request!
 
-## 🛡️ Code of Conduct
+## Pull Request Process
 
-This project is governed by our **Code of Conduct**. By participating, you agree to uphold this code. Report unacceptable behavior to the project maintainers.
+1. Update the README.md with details of changes to the interface, if applicable.
+2. Update the documentation with any new dependencies, environment variables, or configuration changes.
+3. The PR will be merged once you have the sign-off of at least one other developer.
 
----
+## Any contributions you make will be under the MIT Software License
 
-## 🛠️ How Can I Contribute?
+In short, when you submit code changes, your submissions are understood to be under the same [MIT License](LICENSE) that covers the project. Feel free to contact the maintainers if that's a concern.
 
-### 1️⃣ Reporting Bugs or Feature Requests
-- Check the [issue tracker](#) to avoid duplicates.
-- Use issue templates (if available).  
-- Provide detailed, relevant information and steps to reproduce bugs.
+## Report bugs using GitHub's [issue tracker](https://github.com/website-live/website-live/issues)
 
-### 2️⃣ Code Contributions
-1. Fork the repository.  
-2. Create a feature or fix branch.  
-3. Write and test your code.  
-4. Submit a pull request (PR).
+We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/website-live/website-live/issues/new); it's that easy!
 
-### 3️⃣ Join as a Core Contributor  
-Interested in maintaining and growing the project? Fill out our [Contributor Application Form](https://forms.gle/TBSteXSDCtBDwr5m7).
+## Write bug reports with detail, background, and sample code
 
----
+**Great Bug Reports** tend to have:
 
-## ✅ Pull Request Guidelines
+- A quick summary and/or background
+- Steps to reproduce
+  - Be specific!
+  - Give sample code if you can.
+- What you expected would happen
+- What actually happens
+- Notes (possibly including why you think this might be happening, or stuff you tried that didn't work)
 
-### PR Checklist  
-- Branch from the **main** branch.  
-- Update documentation, if needed.  
-- Test all functionality manually.  
-- Focus on one feature/bug per PR.  
+## Use a Consistent Coding Style
 
-### Review Process  
-1. Manual testing by reviewers.  
-2. At least one maintainer review required.  
-3. Address review comments.  
-4. Maintain a clean commit history.
+* Use TypeScript for type safety
+* 2 spaces for indentation rather than tabs
+* You can try running `pnpm run lint:fix` for style unification
 
----
+## License
 
-## 📏 Coding Standards
-
-### General Guidelines  
-- Follow existing code style.  
-- Comment complex logic.  
-- Keep functions small and focused.  
-- Use meaningful variable names.
-
----
-
-## 🖥️ Development Setup
-
-### 1️⃣ Initial Setup  
-- Clone the repository:  
-  ```bash
-  git clone https://github.com/stackblitz-labs/bolt.diy.git
-  ```
-- Install dependencies:  
-  ```bash
-  pnpm install
-  ```
-- Set up environment variables:  
-  1. Rename `.env.example` to `.env.local`.  
-  2. Add your API keys:
-     ```bash
-     GROQ_API_KEY=XXX
-     HuggingFace_API_KEY=XXX
-     OPENAI_API_KEY=XXX
-     ...
-     ```
-  3. Optionally set:  
-     - Debug level: `VITE_LOG_LEVEL=debug`  
-     - Context size: `DEFAULT_NUM_CTX=32768`  
-
-**Note**: Never commit your `.env.local` file to version control. It’s already in `.gitignore`.
-
-### 2️⃣ Run Development Server  
-```bash
-pnpm run dev
-```
-**Tip**: Use **Google Chrome Canary** for local testing.
-
----
-
-## 🧪 Testing
-
-Run the test suite with:  
-```bash
-pnpm test
-```
-
----
-
-## 🚀 Deployment
-
-### Deploy to Cloudflare Pages  
-```bash
-pnpm run deploy
-```
-Ensure you have required permissions and that Wrangler is configured.
-
----
-
-## 🐳 Docker Deployment
-
-This section outlines the methods for deploying the application using Docker. The processes for **Development** and **Production** are provided separately for clarity.
-
----
-
-### 🧑‍💻 Development Environment  
-
-#### Build Options  
-
-**Option 1: Helper Scripts**  
-```bash
-# Development build
-npm run dockerbuild
-```
-
-**Option 2: Direct Docker Build Command**  
-```bash
-docker build . --target bolt-ai-development
-```
-
-**Option 3: Docker Compose Profile**  
-```bash
-docker compose --profile development up
-```
-
-#### Running the Development Container  
-```bash
-docker run -p 5173:5173 --env-file .env.local bolt-ai:development
-```
-
----
-
-### 🏭 Production Environment  
-
-#### Build Options  
-
-**Option 1: Helper Scripts**  
-```bash
-# Production build
-npm run dockerbuild:prod
-```
-
-**Option 2: Direct Docker Build Command**  
-```bash
-docker build . --target bolt-ai-production
-```
-
-**Option 3: Docker Compose Profile**  
-```bash
-docker compose --profile production up
-```
-
-#### Running the Production Container  
-```bash
-docker run -p 5173:5173 --env-file .env.local bolt-ai:production
-```
-
----
-
-### Coolify Deployment  
-
-For an easy deployment process, use [Coolify](https://github.com/coollabsio/coolify):  
-1. Import your Git repository into Coolify.  
-2. Choose **Docker Compose** as the build pack.  
-3. Configure environment variables (e.g., API keys).  
-4. Set the start command:  
-   ```bash
-   docker compose --profile production up
-   ```
-
----
-
-## 🛠️ VS Code Dev Containers Integration
-
-The `docker-compose.yaml` configuration is compatible with **VS Code Dev Containers**, making it easy to set up a development environment directly in Visual Studio Code.
-
-### Steps to Use Dev Containers
-
-1. Open the command palette in VS Code (`Ctrl+Shift+P` or `Cmd+Shift+P` on macOS).  
-2. Select **Dev Containers: Reopen in Container**.  
-3. Choose the **development** profile when prompted.  
-4. VS Code will rebuild the container and open it with the pre-configured environment.
-
----
-
-## 🔑 Environment Variables
-
-Ensure `.env.local` is configured correctly with:  
-- API keys.  
-- Context-specific configurations.  
-
-Example for the `DEFAULT_NUM_CTX` variable:  
-```bash
-DEFAULT_NUM_CTX=24576 # Uses 32GB VRAM
-```
+By contributing, you agree that your contributions will be licensed under its MIT License.

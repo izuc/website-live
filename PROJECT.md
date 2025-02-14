@@ -1,57 +1,59 @@
-# Project management of bolt.diy
+# Website.Live Project Management
 
-First off: this sounds funny, we know. "Project management" comes from a world of enterprise stuff and this project is
-far from being enterprisy- it's still anarchy all over the place 😉
+This document outlines how we organize and manage the Website.Live project. It serves as a guide for both new and existing contributors to understand our development process and project structure.
 
-But we need to organize ourselves somehow, right?
+## Project Structure
 
-> tl;dr: We've got a project board with epics and features. We use PRs as change log and as materialized features. Find it [here](https://github.com/orgs/stackblitz-labs/projects/4).
+The project is organized into several key areas:
 
-Here's how we structure long-term vision, mid-term capabilities of the software and short term improvements.
+- `app/` - Core application code
+- `public/` - Static assets
+- `types/` - TypeScript type definitions
+- `docs/` - Project documentation
 
-## Strategic epics (long-term)
+## Development Process
 
-Strategic epics define areas in which the product evolves. Usually, these epics don’t overlap. They shall allow the core
-team to define what they believe is most important and should be worked on with the highest priority.
+### 1. Planning
+- Features and improvements are tracked through GitHub Issues
+- Major features are discussed in GitHub Discussions
+- Roadmap items are prioritized based on community feedback
 
-You can find the [epics as issues](https://github.com/stackblitz-labs/bolt.diy/labels/epic) which are probably never
-going to be closed.
+### 2. Implementation
+- Development happens in feature branches
+- Code reviews are required for all changes
+- Tests must pass before merging
+- Documentation is updated alongside code changes
 
-What's the benefit / purpose of epics?
+### 3. Release Process
+- Changes are merged to main branch
+- Releases are tagged with semantic versioning
+- Changelog is updated with each release
 
-1. Prioritization
+## Getting Involved
 
-E. g. we could say “managing files is currently more important that quality”. Then, we could thing about which features
-would bring “managing files” forward. It may be different features, such as “upload local files”, “import from a repo”
-or also undo/redo/commit.
+1. Check our open issues for tasks that interest you
+2. Join discussions about features and improvements
+3. Submit pull requests with your contributions
+4. Help improve documentation
 
-In a more-or-less regular meeting dedicated for that, the core team discusses which epics matter most, sketch features
-and then check who can work on them. After the meeting, they update the roadmap (at least for the next development turn)
-and this way communicate where the focus currently is.
+## Communication
 
-2. Grouping of features
+- GitHub Issues: Bug reports and feature requests
+- GitHub Discussions: General discussion and planning
+- Pull Requests: Code review and collaboration
 
-By linking features with epics, we can keep them together and document *why* we invest work into a particular thing.
+## Code Quality Standards
 
-## Features (mid-term)
+We maintain high standards for code quality:
 
-We all know probably a dozen of methodologies following which features are being described (User story, business
-function, you name it).
+- TypeScript for type safety
+- Comprehensive test coverage
+- Consistent code formatting
+- Clear documentation
+- Performance optimization
 
-However, we intentionally describe features in a more vague manner. Why? Everybody loves crisp, well-defined
-acceptance-criteria, no? Well, every product owner loves it. because he knows what he’ll get once it’s done.
+## Need Help?
 
-But: **here is no owner of this product**. Therefore, we grant *maximum flexibility to the developer contributing a feature* – so that he can bring in his ideas and have most fun implementing it.
-
-The feature therefore tries to describe *what* should be improved but not in detail *how*.
-
-## PRs as materialized features (short-term)
-
-Once a developer starts working on a feature, a draft-PR *can* be opened asap to share, describe and discuss, how the feature shall be implemented. But: this is not a must. It just helps to get early feedback and get other developers involved. Sometimes, the developer just wants to get started and then open a PR later. 
-
-In a loosely organized project, it may as well happen that multiple PRs are opened for the same feature. This is no real issue: Usually, peoply being passionate about a solution are willing to join forces and get it done together. And if a second developer was just faster getting the same feature realized: Be happy that it's been done, close the PR and look out for the next feature to implement 🤓
-
-## PRs as change log
-
-Once a PR is merged, a squashed commit contains the whole PR description which allows for a good change log.
-All authors of commits in the PR are mentioned in the squashed commit message and become contributors 🙌
+- Check our documentation
+- Open an issue for questions
+- Join our community discussions

@@ -294,17 +294,93 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         <div ref={scrollRef} className="flex flex-col lg:flex-row overflow-y-auto w-full h-full">
           <div className={classNames(styles.Chat, 'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full')}>
             {!chatStarted && (
-              <div id="intro" className="mt-[16vh] max-w-chat mx-auto text-center px-4 lg:px-0">
-                <h1 className="text-3xl lg:text-6xl font-bold text-bolt-elements-textPrimary mb-4 animate-fade-in">
-                  Where ideas begin
-                </h1>
-                <p className="text-md lg:text-xl mb-8 text-bolt-elements-textSecondary animate-fade-in animation-delay-200">
-                  Bring ideas to life in seconds or get help on existing projects.
-                </p>
-              </div>
+              <>
+                <div id="intro" className="min-h-fit py-16 w-full max-w-[90rem] mx-auto text-center px-4 lg:px-8">
+                  <div className="space-y-8 relative">
+                    {/* Background effects */}
+                    <div className="absolute inset-0 -z-10 overflow-hidden">
+                      {/* Main glow */}
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                        <div className="w-[min(70vw,500px)] h-[min(70vw,500px)] bg-gradient-to-br from-accent-500/30 via-accent-500/5 to-transparent rounded-full blur-3xl opacity-30 animate-pulse"></div>
+                      </div>
+                      
+                      {/* Top accent */}
+                      <div className="absolute -top-20 left-0 w-full h-[min(40vw,20rem)]">
+                        <div className="absolute inset-0 bg-gradient-to-b from-blue-500/20 via-blue-500/5 to-transparent blur-3xl"></div>
+                      </div>
+                      
+                      {/* Bottom accent */}
+                      <div className="absolute -bottom-20 left-0 w-full h-[min(40vw,20rem)]">
+                        <div className="absolute inset-0 bg-gradient-to-t from-purple-500/20 via-purple-500/5 to-transparent blur-3xl"></div>
+                      </div>
+                      
+                      {/* Floating orbs */}
+                      <div className="absolute top-1/4 left-1/4 w-24 h-24 bg-gradient-to-br from-accent-500/20 to-transparent rounded-full blur-2xl opacity-20 animate-float"></div>
+                      <div className="absolute bottom-1/4 right-1/4 w-32 h-32 bg-gradient-to-bl from-blue-500/20 to-transparent rounded-full blur-2xl opacity-20 animate-float-delayed"></div>
+                      
+                      {/* Subtle grid */}
+                      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f2937_1px,transparent_1px),linear-gradient(to_bottom,#1f2937_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-10"></div>
+                    </div>
+
+                    {/* Main content */}
+                    <div className="space-y-4">
+                      <div className="relative inline-block">
+                        <h1 className="text-[min(10vw,4rem)] font-bold text-bolt-elements-textPrimary tracking-tight animate-fade-in">
+                          Website<span className="text-accent-500 inline-block hover:scale-105 transition-transform">.Live</span>
+                        </h1>
+                      </div>
+                      <p className="text-[min(4vw,1.5rem)] text-bolt-elements-textSecondary animate-fade-in animation-delay-200 max-w-[min(90vw,36rem)] mx-auto leading-relaxed">
+                        Transform your ideas into stunning websites with the power of AI
+                      </p>
+                    </div>
+
+                    {/* Features */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-[min(90vw,64rem)] mx-auto animate-fade-in animation-delay-300">
+                      <div className="group px-4 py-3 rounded-xl bg-bolt-elements-background-depth-2/50 border border-bolt-elements-borderColor backdrop-blur-sm hover:bg-bolt-elements-background-depth-2 transition-all">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-accent-500/10">
+                            <div className="i-ph:sparkle text-lg text-accent-500 group-hover:scale-110 transition-transform"></div>
+                          </div>
+                          <div className="text-left">
+                            <h3 className="text-sm font-semibold text-bolt-elements-textPrimary">AI-Powered</h3>
+                            <p className="text-xs text-bolt-elements-textSecondary">Build websites faster with AI</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="group px-4 py-3 rounded-xl bg-bolt-elements-background-depth-2/50 border border-bolt-elements-borderColor backdrop-blur-sm hover:bg-bolt-elements-background-depth-2 transition-all">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-accent-500/10">
+                            <div className="i-ph:code text-lg text-accent-500 group-hover:scale-110 transition-transform"></div>
+                          </div>
+                          <div className="text-left">
+                            <h3 className="text-sm font-semibold text-bolt-elements-textPrimary">Modern Stack</h3>
+                            <p className="text-xs text-bolt-elements-textSecondary">Best practices built-in</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="group px-4 py-3 rounded-xl bg-bolt-elements-background-depth-2/50 border border-bolt-elements-borderColor backdrop-blur-sm hover:bg-bolt-elements-background-depth-2 transition-all">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-accent-500/10">
+                            <div className="i-ph:rocket-launch text-lg text-accent-500 group-hover:scale-110 transition-transform"></div>
+                          </div>
+                          <div className="text-left">
+                            <h3 className="text-sm font-semibold text-bolt-elements-textPrimary">Instant Deploy</h3>
+                            <p className="text-xs text-bolt-elements-textSecondary">Go live in minutes</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="fixed bottom-4 w-full text-center">
+                  <p className="text-sm text-bolt-elements-textTertiary">
+                    Created by <a href="https://lance.name" target="_blank" rel="noopener noreferrer" className="text-accent-500 hover:text-accent-600 transition-colors font-medium">Lance</a>
+                  </p>
+                </div>
+              </>
             )}
             <div
-              className={classNames('pt-6 px-2 sm:px-6', {
+              className={classNames('pt-6 px-4 sm:px-6 lg:px-8 w-full', {
                 'h-full flex flex-col': chatStarted,
               })}
             >
@@ -313,7 +389,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   return chatStarted ? (
                     <Messages
                       ref={messageRef}
-                      className="flex flex-col w-full flex-1 max-w-chat pb-6 mx-auto z-1"
+                      className="flex flex-col w-full flex-1 max-w-[90rem] pb-6 mx-auto z-1"
                       messages={messages}
                       isStreaming={isStreaming}
                     />
@@ -321,7 +397,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 }}
               </ClientOnly>
               <div
-                className={classNames('flex flex-col gap-4 w-full max-w-chat mx-auto z-prompt mb-6', {
+                className={classNames('flex flex-col gap-4 w-full max-w-[90rem] mx-auto z-prompt mb-6', {
                   'sticky bottom-2': chatStarted,
                 })}
               >
@@ -339,41 +415,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 </div>
                 <div
                   className={classNames(
-                    'bg-bolt-elements-background-depth-2 p-3 rounded-lg border border-bolt-elements-borderColor relative w-full max-w-chat mx-auto z-prompt',
-
-                    /*
-                     * {
-                     *   'sticky bottom-2': chatStarted,
-                     * },
-                     */
+                    'bg-bolt-elements-background-depth-2/80 backdrop-blur-lg p-4 rounded-2xl border border-bolt-elements-borderColor/50 relative w-full max-w-[90rem] mx-auto z-prompt shadow-lg',
                   )}
                 >
-                  <svg className={classNames(styles.PromptEffectContainer)}>
-                    <defs>
-                      <linearGradient
-                        id="line-gradient"
-                        x1="20%"
-                        y1="0%"
-                        x2="-14%"
-                        y2="10%"
-                        gradientUnits="userSpaceOnUse"
-                        gradientTransform="rotate(-45)"
-                      >
-                        <stop offset="0%" stopColor="#b44aff" stopOpacity="0%"></stop>
-                        <stop offset="40%" stopColor="#b44aff" stopOpacity="80%"></stop>
-                        <stop offset="50%" stopColor="#b44aff" stopOpacity="80%"></stop>
-                        <stop offset="100%" stopColor="#b44aff" stopOpacity="0%"></stop>
-                      </linearGradient>
-                      <linearGradient id="shine-gradient">
-                        <stop offset="0%" stopColor="white" stopOpacity="0%"></stop>
-                        <stop offset="40%" stopColor="#ffffff" stopOpacity="80%"></stop>
-                        <stop offset="50%" stopColor="#ffffff" stopOpacity="80%"></stop>
-                        <stop offset="100%" stopColor="white" stopOpacity="0%"></stop>
-                      </linearGradient>
-                    </defs>
-                    <rect className={classNames(styles.PromptEffectLine)} pathLength="100" strokeLinecap="round"></rect>
-                    <rect className={classNames(styles.PromptShine)} x="48" y="24" width="70" height="1"></rect>
-                  </svg>
                   <div>
                     <ClientOnly>
                       {() => (
@@ -422,15 +466,14 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   </ClientOnly>
                   <div
                     className={classNames(
-                      'relative shadow-xs border border-bolt-elements-borderColor backdrop-blur rounded-lg',
+                      'relative border border-bolt-elements-borderColor/50 backdrop-blur-sm rounded-xl bg-bolt-elements-background-depth-1/50 shadow-inner transition-all duration-200 hover:border-accent-500/50 hover:bg-bolt-elements-background-depth-1/80 group',
                     )}
                   >
                     <textarea
                       ref={textareaRef}
                       className={classNames(
-                        'w-full pl-4 pt-4 pr-16 outline-none resize-none text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary bg-transparent text-sm',
-                        'transition-all duration-200',
-                        'hover:border-bolt-elements-focus',
+                        'w-full px-5 pt-4 pr-16 outline-none resize-none text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary bg-transparent text-sm rounded-xl transition-all duration-200',
+                        'focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500',
                       )}
                       onDragEnter={(e) => {
                         e.preventDefault();
@@ -492,7 +535,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         minHeight: TEXTAREA_MIN_HEIGHT,
                         maxHeight: TEXTAREA_MAX_HEIGHT,
                       }}
-                      placeholder="How can Bolt help you today?"
+                      placeholder="How can Website Live help you today?"
                       translate="no"
                     />
                     <ClientOnly>
@@ -514,15 +557,19 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         />
                       )}
                     </ClientOnly>
-                    <div className="flex justify-between items-center text-sm p-4 pt-2">
-                      <div className="flex gap-1 items-center">
-                        <IconButton title="Upload file" className="transition-all" onClick={() => handleFileUpload()}>
-                          <div className="i-ph:paperclip text-xl"></div>
+                    <div className="flex justify-between items-center text-sm px-4 pt-2 pb-3">
+                      <div className="flex gap-2 items-center">
+                        <IconButton 
+                          title="Upload file" 
+                          className="transition-all hover:bg-accent-500/10" 
+                          onClick={() => handleFileUpload()}
+                        >
+                          <div className="i-ph:paperclip text-xl group-hover:text-accent-500"></div>
                         </IconButton>
                         <IconButton
                           title="Enhance prompt"
                           disabled={input.length === 0 || enhancingPrompt}
-                          className={classNames('transition-all', enhancingPrompt ? 'opacity-100' : '')}
+                          className={classNames('transition-all hover:bg-accent-500/10', enhancingPrompt ? 'opacity-100' : '')}
                           onClick={() => {
                             enhancePrompt?.();
                             toast.success('Prompt enhanced!');
@@ -531,7 +578,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           {enhancingPrompt ? (
                             <div className="i-svg-spinners:90-ring-with-bg text-bolt-elements-loader-progress text-xl animate-spin"></div>
                           ) : (
-                            <div className="i-bolt:stars text-xl"></div>
+                            <div className="i-bolt:stars text-xl group-hover:text-accent-500"></div>
                           )}
                         </IconButton>
 
@@ -544,7 +591,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         {chatStarted && <ClientOnly>{() => <ExportChatButton exportChat={exportChat} />}</ClientOnly>}
                         <IconButton
                           title="Model Settings"
-                          className={classNames('transition-all flex items-center gap-1', {
+                          className={classNames('transition-all flex items-center gap-1 hover:bg-accent-500/10', {
                             'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent':
                               isModelSettingsCollapsed,
                             'bg-bolt-elements-item-backgroundDefault text-bolt-elements-item-contentDefault':
@@ -553,15 +600,15 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           onClick={() => setIsModelSettingsCollapsed(!isModelSettingsCollapsed)}
                           disabled={!providerList || providerList.length === 0}
                         >
-                          <div className={`i-ph:caret-${isModelSettingsCollapsed ? 'right' : 'down'} text-lg`} />
+                          <div className={`i-ph:caret-${isModelSettingsCollapsed ? 'right' : 'down'} text-lg group-hover:text-accent-500`} />
                           {isModelSettingsCollapsed ? <span className="text-xs">{model}</span> : <span />}
                         </IconButton>
                       </div>
                       {input.length > 3 ? (
-                        <div className="text-xs text-bolt-elements-textTertiary">
-                          Use <kbd className="kdb px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2">Shift</kbd>{' '}
-                          + <kbd className="kdb px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2">Return</kbd>{' '}
-                          a new line
+                        <div className="hidden sm:block text-xs text-bolt-elements-textTertiary">
+                          Use <kbd className="kdb px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2/80 border border-bolt-elements-borderColor/50">Shift</kbd>{' '}
+                          + <kbd className="kdb px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2/80 border border-bolt-elements-borderColor/50">Return</kbd>{' '}
+                          for a new line
                         </div>
                       ) : null}
                     </div>
@@ -571,21 +618,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             </div>
             <div className="flex flex-col justify-center gap-5">
               {!chatStarted && (
-                <div className="flex justify-center gap-2">
+                <div className="flex justify-center gap-2 pb-8">
                   {ImportButtons(importChat)}
                   <GitCloneButton importChat={importChat} />
                 </div>
               )}
-              {!chatStarted &&
-                ExamplePrompts((event, messageInput) => {
-                  if (isStreaming) {
-                    handleStop?.();
-                    return;
-                  }
-
-                  handleSendMessage?.(event, messageInput);
-                })}
-              {!chatStarted && <StarterTemplates />}
             </div>
           </div>
           <ClientOnly>{() => <Workbench chatStarted={chatStarted} isStreaming={isStreaming} />}</ClientOnly>

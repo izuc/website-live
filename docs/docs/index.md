@@ -1,5 +1,28 @@
-# Welcome to bolt diy
-bolt.diy allows you to choose the LLM that you use for each prompt! Currently, you can use OpenAI, Anthropic, Ollama, OpenRouter, Gemini, LMStudio, Mistral, xAI, HuggingFace, DeepSeek, or Groq models - and it is easily extended to use any other model supported by the Vercel AI SDK! See the instructions below for running this locally and extending it to include more models.
+# Welcome to Website.Live
+
+Website.Live is an AI-powered web development platform that helps you build and deploy websites quickly using natural language commands. Our platform combines modern web technologies with artificial intelligence to streamline the development process.
+
+## Key Features
+
+- **AI-Powered Development**: Build websites faster with intelligent AI assistance
+- **Modern Tech Stack**: Latest technologies and best practices built-in
+- **Instant Deployment**: Go live with your website in minutes
+- **Multiple LLM Support**: Choose from various AI models
+- **Real-time Preview**: See your changes instantly
+- **Integrated Terminal**: Execute commands directly in the interface
+
+## Getting Started
+
+Visit our [Quick Start Guide](quickstart.md) to begin building with Website.Live.
+
+## Community
+
+Join our growing community of developers:
+
+- [GitHub Repository](https://github.com/website-live/website-live)
+- [Community Forum](https://community.website.live)
+- [Follow us on X](https://x.com/websitelive)
+- [Join us on Bluesky](https://bsky.app/profile/website.live)
 
 ## Table of Contents
 - [Join the community!](#join-the-community)
@@ -97,7 +120,7 @@ ANTHROPIC_API_KEY=XXX
 
 Once you've set your keys, you can proceed with running the app. You will set these keys up during the initial setup, and you can revisit and update them later after the app is running.
 
-**Note**: Never commit your `.env.local` file to version control. It’s already included in the `.gitignore`.
+**Note**: Never commit your `.env.local` file to version control. It's already included in the `.gitignore`.
 
 #### 2. Configure API Keys Directly in the Application
 
