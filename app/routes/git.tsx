@@ -7,7 +7,10 @@ import { Header } from '~/components/header/Header';
 import BackgroundRays from '~/components/ui/BackgroundRays';
 
 export const meta: MetaFunction = () => {
-  return [{ title: 'Website Live' }, { name: 'description', content: 'Talk with Website Live, your AI-powered web development assistant' }];
+  return [
+    { title: 'Website Live' },
+    { name: 'description', content: 'Talk with Website Live, your AI-powered web development assistant' },
+  ];
 };
 
 export async function loader(args: LoaderFunctionArgs) {

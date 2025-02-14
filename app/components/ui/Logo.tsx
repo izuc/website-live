@@ -9,7 +9,7 @@ const Logo = ({ white }: { white?: boolean }) => {
         viewBox="0 0 850 700"
         version="1.1"
         xmlns="http://www.w3.org/2000/svg"
-        className={white ? "text-white" : "text-accent-500"}
+        className={white ? 'text-white' : 'text-accent-500'}
       >
         <g id="#ffffffff">
           <path
@@ -35,4 +35,4 @@ const Logo = ({ white }: { white?: boolean }) => {
   );
 };
 
-export default Logo; 
+export default Logo;

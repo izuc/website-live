@@ -19,7 +19,6 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import styles from './BaseChat.module.scss';
 import { ExportChatButton } from '~/components/chat/chatExportAndImport/ExportChatButton';
 import { ImportButtons } from '~/components/chat/chatExportAndImport/ImportButtons';
-import { ExamplePrompts } from '~/components/chat/ExamplePrompts';
 import GitCloneButton from './GitCloneButton';
 
 import FilePreview from './FilePreview';
@@ -28,7 +27,6 @@ import { SpeechRecognitionButton } from '~/components/chat/SpeechRecognition';
 import type { ProviderInfo } from '~/types/model';
 import { ScreenshotStateManager } from './ScreenshotStateManager';
 import { toast } from 'react-toastify';
-import StarterTemplates from './StarterTemplates';
 import type { ActionAlert } from '~/types/actions';
 import ChatAlert from './ChatAlert';
 import type { ModelInfo } from '~/lib/modules/llm/types';
@@ -303,21 +301,21 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
                         <div className="w-[min(70vw,500px)] h-[min(70vw,500px)] bg-gradient-to-br from-accent-500/30 via-accent-500/5 to-transparent rounded-full blur-3xl opacity-30 animate-pulse"></div>
                       </div>
-                      
+
                       {/* Top accent */}
                       <div className="absolute -top-20 left-0 w-full h-[min(40vw,20rem)]">
                         <div className="absolute inset-0 bg-gradient-to-b from-blue-500/20 via-blue-500/5 to-transparent blur-3xl"></div>
                       </div>
-                      
+
                       {/* Bottom accent */}
                       <div className="absolute -bottom-20 left-0 w-full h-[min(40vw,20rem)]">
                         <div className="absolute inset-0 bg-gradient-to-t from-purple-500/20 via-purple-500/5 to-transparent blur-3xl"></div>
                       </div>
-                      
+
                       {/* Floating orbs */}
                       <div className="absolute top-1/4 left-1/4 w-24 h-24 bg-gradient-to-br from-accent-500/20 to-transparent rounded-full blur-2xl opacity-20 animate-float"></div>
                       <div className="absolute bottom-1/4 right-1/4 w-32 h-32 bg-gradient-to-bl from-blue-500/20 to-transparent rounded-full blur-2xl opacity-20 animate-float-delayed"></div>
-                      
+
                       {/* Subtle grid */}
                       <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f2937_1px,transparent_1px),linear-gradient(to_bottom,#1f2937_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-10"></div>
                     </div>
@@ -326,7 +324,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     <div className="space-y-4">
                       <div className="relative inline-block">
                         <h1 className="text-[min(10vw,4rem)] font-bold text-bolt-elements-textPrimary tracking-tight animate-fade-in">
-                          Website<span className="text-accent-500 inline-block hover:scale-105 transition-transform">.Live</span>
+                          Website
+                          <span className="text-accent-500 inline-block hover:scale-105 transition-transform">
+                            .Live
+                          </span>
                         </h1>
                       </div>
                       <p className="text-[min(4vw,1.5rem)] text-bolt-elements-textSecondary animate-fade-in animation-delay-200 max-w-[min(90vw,36rem)] mx-auto leading-relaxed">
@@ -374,7 +375,15 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 </div>
                 <div className="fixed bottom-4 w-full text-center">
                   <p className="text-sm text-bolt-elements-textTertiary">
-                    Created by <a href="https://lance.name" target="_blank" rel="noopener noreferrer" className="text-accent-500 hover:text-accent-600 transition-colors font-medium">Lance</a>
+                    Created by{' '}
+                    <a
+                      href="https://lance.name"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-accent-500 hover:text-accent-600 transition-colors font-medium"
+                    >
+                      Lance
+                    </a>
                   </p>
                 </div>
               </>
@@ -559,9 +568,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     </ClientOnly>
                     <div className="flex justify-between items-center text-sm px-4 pt-2 pb-3">
                       <div className="flex gap-2 items-center">
-                        <IconButton 
-                          title="Upload file" 
-                          className="transition-all hover:bg-accent-500/10" 
+                        <IconButton
+                          title="Upload file"
+                          className="transition-all hover:bg-accent-500/10"
                           onClick={() => handleFileUpload()}
                         >
                           <div className="i-ph:paperclip text-xl group-hover:text-accent-500"></div>
@@ -569,7 +578,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         <IconButton
                           title="Enhance prompt"
                           disabled={input.length === 0 || enhancingPrompt}
-                          className={classNames('transition-all hover:bg-accent-500/10', enhancingPrompt ? 'opacity-100' : '')}
+                          className={classNames(
+                            'transition-all hover:bg-accent-500/10',
+                            enhancingPrompt ? 'opacity-100' : '',
+                          )}
                           onClick={() => {
                             enhancePrompt?.();
                             toast.success('Prompt enhanced!');
@@ -600,14 +612,22 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           onClick={() => setIsModelSettingsCollapsed(!isModelSettingsCollapsed)}
                           disabled={!providerList || providerList.length === 0}
                         >
-                          <div className={`i-ph:caret-${isModelSettingsCollapsed ? 'right' : 'down'} text-lg group-hover:text-accent-500`} />
+                          <div
+                            className={`i-ph:caret-${isModelSettingsCollapsed ? 'right' : 'down'} text-lg group-hover:text-accent-500`}
+                          />
                           {isModelSettingsCollapsed ? <span className="text-xs">{model}</span> : <span />}
                         </IconButton>
                       </div>
                       {input.length > 3 ? (
                         <div className="hidden sm:block text-xs text-bolt-elements-textTertiary">
-                          Use <kbd className="kdb px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2/80 border border-bolt-elements-borderColor/50">Shift</kbd>{' '}
-                          + <kbd className="kdb px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2/80 border border-bolt-elements-borderColor/50">Return</kbd>{' '}
+                          Use{' '}
+                          <kbd className="kdb px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2/80 border border-bolt-elements-borderColor/50">
+                            Shift
+                          </kbd>{' '}
+                          +{' '}
+                          <kbd className="kdb px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2/80 border border-bolt-elements-borderColor/50">
+                            Return
+                          </kbd>{' '}
                           for a new line
                         </div>
                       ) : null}

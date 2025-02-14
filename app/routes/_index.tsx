@@ -8,7 +8,7 @@ import BackgroundRays from '~/components/ui/BackgroundRays';
 export const meta: MetaFunction = () => {
   return [
     { title: 'Website.Live' },
-    { name: 'description', content: 'Talk with Website.Live, your AI-powered web development assistant' }
+    { name: 'description', content: 'Talk with Website.Live, your AI-powered web development assistant' },
   ];
 };
 
@@ -22,7 +22,15 @@ export default function Index() {
       <ClientOnly fallback={<BaseChat />}>{() => <Chat />}</ClientOnly>
       <footer className="fixed bottom-4 w-full text-center">
         <p className="text-sm text-bolt-elements-textTertiary">
-          Created by <a href="https://lance.name" target="_blank" rel="noopener noreferrer" className="text-accent-500 hover:text-accent-600 transition-colors">Lance</a>
+          Created by{' '}
+          <a
+            href="https://lance.name"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent-500 hover:text-accent-600 transition-colors"
+          >
+            Lance
+          </a>
         </p>
       </footer>
     </div>
