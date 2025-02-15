@@ -1,16 +1,148 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { streamText } from '~/lib/.server/llm/stream-text';
-import type { IProviderSetting, ProviderInfo } from '~/types/model';
+import type { IProviderSetting } from '~/types/model';
 import { generateText } from 'ai';
 import { PROVIDER_LIST } from '~/utils/constants';
 import { MAX_TOKENS } from '~/lib/.server/llm/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
-import type { ModelInfo } from '~/lib/modules/llm/types';
+import type { ModelInfo, ReasoningEffort, ProviderInfo } from '~/lib/modules/llm/types';
 import { getApiKeysFromCookie, getProviderSettingsFromCookie } from '~/lib/api/cookies';
+import { type LanguageModelV1StreamPart, type LanguageModelV1CallOptions, type LanguageModelV1Message } from '@ai-sdk/provider';
 
-export async function action(args: ActionFunctionArgs) {
-  return llmCallAction(args);
+function transformStream(stream: ReadableStream<LanguageModelV1StreamPart>): ReadableStream<LanguageModelV1StreamPart> {
+  return new ReadableStream({
+    async start(controller) {
+      const reader = stream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            controller.close();
+            break;
+          }
+          // Convert "reasoning" type to "text-delta" type
+          if ('textDelta' in value) {
+            controller.enqueue({
+              type: "text-delta",
+              textDelta: value.textDelta
+            });
+          } else {
+            controller.enqueue(value);
+          }
+        }
+      } catch (e) {
+        controller.error(e);
+      }
+    }
+  });
 }
+
+export const action = async ({ request, context }: ActionFunctionArgs) => {
+  try {
+    const formData = await request.formData();
+    const message = formData.get('message')?.toString() || '';
+    const model = formData.get('model')?.toString() || '';
+    const systemMessage = formData.get('system')?.toString() || '';
+    const reasoningEffort = (formData.get('reasoning_effort')?.toString() || 'auto') as ReasoningEffort;
+    const apiKeys = JSON.parse(formData.get('api_keys')?.toString() || '{}');
+    const providerSettings = JSON.parse(formData.get('provider_settings')?.toString() || '{}');
+
+    if (!message || !model) {
+      return new Response('Missing required fields', { status: 400 });
+    }
+
+    const llmManager = LLMManager.getInstance(import.meta.env);
+    const modelInfo = llmManager.getModelList().find(m => m.name === model);
+    
+    if (!modelInfo) {
+      return new Response('Model not found', { status: 400 });
+    }
+
+    const provider = llmManager.getProvider(modelInfo.provider);
+    
+    if (!provider) {
+      return new Response('Provider not found', { status: 400 });
+    }
+
+    const modelInstance = provider.getModelInstance({
+      model,
+      serverEnv: context.cloudflare?.env as any,
+      apiKeys,
+      providerSettings,
+    });
+
+    const streamOptions = {
+      maxTokens: MAX_TOKENS,
+      reasoning_effort: reasoningEffort,
+    };
+
+    const response = await modelInstance.doStream({
+      inputFormat: 'messages',
+      mode: {
+        type: 'regular'
+      },
+      prompt: [
+        {
+          role: 'system' as const,
+          content: systemMessage,
+        },
+        {
+          role: 'user' as const,
+          content: [{
+            type: 'text' as const,
+            text: message,
+          }],
+        },
+      ],
+      maxTokens: MAX_TOKENS,
+      providerMetadata: {
+        'ai-sdk': {
+          reasoning_effort: reasoningEffort,
+        },
+      },
+    });
+
+    // Transform the stream to ensure compatibility
+    const transformedStream = transformStream(response.stream);
+
+    return new Response(
+      new ReadableStream({
+        async start(controller) {
+          const reader = transformedStream.getReader();
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) {
+                controller.close();
+                break;
+              }
+              if ('textDelta' in value) {
+                controller.enqueue(value.textDelta);
+              }
+            }
+          } catch (e) {
+            controller.error(e);
+          }
+        }
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+        },
+      }
+    );
+
+  } catch (error) {
+    console.error('Error in llmcall:', error);
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+  }
+};
 
 async function getModelList(options: {
   apiKeys?: Record<string, string>;
@@ -54,13 +186,14 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
   if (streamOutput) {
     try {
       const result = await streamText({
-        options: {
-          system,
-        },
         messages: [
           {
+            role: 'system',
+            content: system,
+          },
+          {
             role: 'user',
-            content: `${message}`,
+            content: message,
           },
         ],
         env: context.cloudflare?.env as any,
@@ -106,30 +239,65 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
         throw new Error('Provider not found');
       }
 
-      const result = await generateText({
-        system,
-        messages: [
-          {
-            role: 'user',
-            content: `${message}`,
-          },
-        ],
-        model: providerInfo.getModelInstance({
-          model: modelDetails.name,
-          serverEnv: context.cloudflare?.env as any,
-          apiKeys,
-          providerSettings,
-        }),
-        maxTokens: dynamicMaxTokens,
-        toolChoice: 'none',
+      const llmManager = LLMManager.getInstance(import.meta.env);
+      const llm = await provider.getModelInstance({
+        model,
+        serverEnv: context.cloudflare?.env as any,
+        apiKeys,
+        providerSettings,
       });
 
-      return new Response(JSON.stringify(result), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await llm.doStream({
+        inputFormat: 'messages',
+        mode: {
+          type: 'regular'
         },
+        prompt: [
+          {
+            role: 'system' as const,
+            content: system,
+          },
+          {
+            role: 'user' as const,
+            content: [{
+              type: 'text' as const,
+              text: message,
+            }],
+          },
+        ],
+        maxTokens: dynamicMaxTokens,
       });
+
+      // Transform the stream to ensure compatibility
+      const transformedStream = transformStream(response.stream);
+
+      return new Response(
+        new ReadableStream({
+          async start(controller) {
+            const reader = transformedStream.getReader();
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                  controller.close();
+                  break;
+                }
+                if ('textDelta' in value) {
+                  controller.enqueue(value.textDelta);
+                }
+              }
+            } catch (e) {
+              controller.error(e);
+            }
+          }
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+          },
+        }
+      );
     } catch (error: unknown) {
       console.log(error);
 

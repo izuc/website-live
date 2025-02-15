@@ -1,9 +1,19 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
-import type { ModelInfo } from '~/lib/modules/llm/types';
+import type { ModelInfo, ProviderOptions } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModelV1 } from 'ai';
-import { logger } from '~/utils/logger';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('lmstudio-provider');
+
+interface GetModelInstanceParams {
+  model: string;
+  serverEnv: Env;
+  apiKeys?: Record<string, string>;
+  providerSettings?: Record<string, IProviderSetting>;
+  options?: ProviderOptions;
+}
 
 export default class LMStudioProvider extends BaseProvider {
   name = 'LMStudio';
@@ -12,22 +22,30 @@ export default class LMStudioProvider extends BaseProvider {
   icon = 'i-ph:cloud-arrow-down';
 
   config = {
-    baseUrlKey: 'LMSTUDIO_API_BASE_URL',
-    baseUrl: 'http://localhost:1234/',
+    apiTokenKey: '',
+    baseUrlKey: 'LMSTUDIO_BASE_URL',
   };
 
-  staticModels: ModelInfo[] = [];
+  staticModels: ModelInfo[] = [
+    {
+      name: 'local',
+      label: 'Local Model',
+      provider: 'LMStudio',
+      maxTokenAllowed: 8000,
+      supportsReasoning: true,
+    },
+  ];
 
   async getDynamicModels(
+    serverEnv: Env,
     apiKeys?: Record<string, string>,
-    settings?: IProviderSetting,
-    serverEnv: Record<string, string> = {},
+    providerSettings?: Record<string, IProviderSetting>,
   ): Promise<ModelInfo[]> {
     let { baseUrl } = this.getProviderBaseUrlAndKey({
       apiKeys,
-      providerSettings: settings,
+      providerSettings: providerSettings?.[this.name],
       serverEnv,
-      defaultBaseUrlKey: 'LMSTUDIO_API_BASE_URL',
+      defaultBaseUrlKey: 'LMSTUDIO_BASE_URL',
       defaultApiTokenKey: '',
     });
 
@@ -46,6 +64,8 @@ export default class LMStudioProvider extends BaseProvider {
       baseUrl = isDocker ? baseUrl.replace('127.0.0.1', 'host.docker.internal') : baseUrl;
     }
 
+    logger.debug('LMStudio Base Url used: ', baseUrl);
+
     const response = await fetch(`${baseUrl}/v1/models`);
     const data = (await response.json()) as { data: Array<{ id: string }> };
 
@@ -56,38 +76,40 @@ export default class LMStudioProvider extends BaseProvider {
       maxTokenAllowed: 8000,
     }));
   }
-  getModelInstance: (options: {
-    model: string;
-    serverEnv: Env;
-    apiKeys?: Record<string, string>;
-    providerSettings?: Record<string, IProviderSetting>;
-  }) => LanguageModelV1 = (options) => {
-    const { apiKeys, providerSettings, serverEnv, model } = options;
-    let { baseUrl } = this.getProviderBaseUrlAndKey({
+
+  getModelInstance = ({ model, serverEnv, apiKeys, providerSettings, options }: GetModelInstanceParams): LanguageModelV1 => {
+    const { baseUrl } = this.getProviderBaseUrlAndKey({
       apiKeys,
       providerSettings: providerSettings?.[this.name],
       serverEnv: serverEnv as any,
-      defaultBaseUrlKey: 'LMSTUDIO_API_BASE_URL',
+      defaultBaseUrlKey: 'LMSTUDIO_BASE_URL',
       defaultApiTokenKey: '',
     });
 
     if (!baseUrl) {
-      throw new Error('No baseUrl found for LMStudio provider');
+      throw new Error(`Missing base URL for ${this.name} provider`);
     }
 
-    if (typeof window === 'undefined') {
-      const isDocker = process.env.RUNNING_IN_DOCKER === 'true';
-      baseUrl = isDocker ? baseUrl.replace('localhost', 'host.docker.internal') : baseUrl;
-      baseUrl = isDocker ? baseUrl.replace('127.0.0.1', 'host.docker.internal') : baseUrl;
-    }
+    const openai = createOpenAI({ baseURL: baseUrl });
+    const modelInstance = openai(model);
 
-    logger.debug('LMStudio Base Url used: ', baseUrl);
+    // Wrap the doStream method to include options
+    const originalDoStream = modelInstance.doStream;
+    modelInstance.doStream = async (params: any) => {
+      if (options?.reasoning_effort) {
+        params.providerMetadata = {
+          'ai-sdk': {
+            reasoning_effort: options.reasoning_effort,
+          },
+          ...params.providerMetadata,
+        };
+      }
+      if (options?.max_completion_tokens) {
+        params.max_tokens = options.max_completion_tokens;
+      }
+      return originalDoStream.call(modelInstance, params);
+    };
 
-    const lmstudio = createOpenAI({
-      baseUrl: `${baseUrl}/v1`,
-      apiKey: '',
-    });
-
-    return lmstudio(model);
+    return modelInstance;
   };
 }

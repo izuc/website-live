@@ -23,6 +23,7 @@ import type { ProviderInfo } from '~/types/model';
 import { useSearchParams } from '@remix-run/react';
 import { createSampler } from '~/utils/sampler';
 import { getTemplates, selectStarterTemplate } from '~/utils/selectStarterTemplate';
+import type { ReasoningEffort } from '~/lib/modules/llm/types';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -40,6 +41,8 @@ export function Chat() {
     workbenchStore.setReloadedMessages(initialMessages.map((m) => m.id));
   }, [initialMessages]);
 
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('medium');
+
   return (
     <>
       {ready && (
@@ -49,6 +52,8 @@ export function Chat() {
           exportChat={exportChat}
           storeMessageHistory={storeMessageHistory}
           importChat={importChat}
+          reasoningEffort={reasoningEffort}
+          onReasoningEffortChange={setReasoningEffort}
         />
       )}
       <ToastContainer
@@ -106,10 +111,12 @@ interface ChatProps {
   importChat: (description: string, messages: Message[]) => Promise<void>;
   exportChat: () => void;
   description?: string;
+  reasoningEffort: ReasoningEffort;
+  onReasoningEffortChange: (newEffort: ReasoningEffort) => void;
 }
 
 export const ChatImpl = memo(
-  ({ description, initialMessages, storeMessageHistory, importChat, exportChat }: ChatProps) => {
+  ({ description, initialMessages, storeMessageHistory, importChat, exportChat, reasoningEffort, onReasoningEffortChange }: ChatProps) => {
     useShortcuts();
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -145,6 +152,9 @@ export const ChatImpl = memo(
           files,
           promptId,
           contextOptimization: contextOptimizationEnabled,
+          max_completion_tokens: model === 'o3-mini' ? 8000 : undefined,
+          reasoningEffort,
+          model
         },
         sendExtraMessageFields: true,
         onError: (e) => {
@@ -238,14 +248,62 @@ export const ChatImpl = memo(
         return;
       }
 
-      await Promise.all([
-        animate('#examples', { opacity: 0, display: 'none' }, { duration: 0.1 }),
-        animate('#intro', { opacity: 0, flex: 1 }, { duration: 0.2, ease: cubicEasingFn }),
-      ]);
+      try {
+        const examplesElement = document.querySelector('#examples');
+        const introElement = document.querySelector('#intro');
 
-      chatStore.setKey('started', true);
+        if (examplesElement && introElement) {
+          await Promise.all([
+            animate('#examples', { opacity: 0, display: 'none' }, { duration: 0.1 }),
+            animate('#intro', { opacity: 0, flex: 1 }, { duration: 0.2, ease: cubicEasingFn }),
+          ]);
+        }
 
-      setChatStarted(true);
+        chatStore.setKey('started', true);
+        setChatStarted(true);
+      } catch (error) {
+        // If animation fails, still set chat as started
+        console.warn('Animation failed, continuing without animation:', error);
+        chatStore.setKey('started', true);
+        setChatStarted(true);
+      }
+    };
+
+    const transcribeImagesWithGPT4o = async (imageDataList: string[]) => {
+      if (!imageDataList.length) return '';
+      
+      try {
+        // Temporarily switch to GPT-4o for image transcription
+        const gpt4oProvider = PROVIDER_LIST.find(p => p.name === 'OpenAI');
+        if (!gpt4oProvider) throw new Error('OpenAI provider not found');
+        
+        await append({
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Please describe these images in detail for further processing.',
+            },
+            ...imageDataList.map(imageData => ({
+              type: 'image',
+              image: imageData,
+            })),
+          ] as any,
+        });
+
+        // Wait for the assistant's response
+        const response = messages[messages.length - 1];
+        const transcription = typeof response.content === 'string' ? response.content : '';
+        
+        // Remove the transcription messages from the chat
+        setMessages(messages.slice(0, -2));
+        
+        return transcription;
+      } catch (error) {
+        console.error('Error transcribing images:', error);
+        toast.error('Failed to transcribe images. Proceeding without image context.');
+        return '';
+      }
     };
 
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
@@ -255,13 +313,6 @@ export const ChatImpl = memo(
         return;
       }
 
-      /**
-       * @note (delm) Usually saving files shouldn't take long but it may take longer if there
-       * many unsaved files. In that case we need to block user input and show an indicator
-       * of some kind so the user is aware that something is happening. But I consider the
-       * happy case to be no unsaved files and I would expect users to save their changes
-       * before they send another message.
-       */
       await workbenchStore.saveAllFiles();
 
       if (error != null) {
@@ -269,12 +320,19 @@ export const ChatImpl = memo(
       }
 
       const fileModifications = workbenchStore.getFileModifcations();
-
       chatStore.setKey('aborted', false);
-
       runAnimation();
 
-      if (!chatStarted && _input && autoSelectTemplate) {
+      // Handle image transcription for o3-mini
+      let processedInput = _input;
+      if (model === 'o3-mini' && imageDataList.length > 0) {
+        const imageTranscription = await transcribeImagesWithGPT4o(imageDataList);
+        if (imageTranscription) {
+          processedInput = `${_input}\n\nContext from attached images:\n${imageTranscription}`;
+        }
+      }
+
+      if (!chatStarted && processedInput && autoSelectTemplate) {
         setFakeLoading(true);
         setMessages([
           {
@@ -283,7 +341,7 @@ export const ChatImpl = memo(
             content: [
               {
                 type: 'text',
-                text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${_input}`,
+                text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${processedInput}`,
               },
               ...imageDataList.map((imageData) => ({
                 type: 'image',
@@ -296,7 +354,7 @@ export const ChatImpl = memo(
         // reload();
 
         const { template, title } = await selectStarterTemplate({
-          message: _input,
+          message: processedInput,
           model,
           provider,
         });
@@ -319,7 +377,7 @@ export const ChatImpl = memo(
               {
                 id: `${new Date().getTime()}`,
                 role: 'user',
-                content: _input,
+                content: processedInput,
 
                 // annotations: ['hidden'],
               },
@@ -348,7 +406,7 @@ export const ChatImpl = memo(
                 content: [
                   {
                     type: 'text',
-                    text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${_input}`,
+                    text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${processedInput}`,
                   },
                   ...imageDataList.map((imageData) => ({
                     type: 'image',
@@ -370,7 +428,7 @@ export const ChatImpl = memo(
               content: [
                 {
                   type: 'text',
-                  text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${_input}`,
+                  text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${processedInput}`,
                 },
                 ...imageDataList.map((imageData) => ({
                   type: 'image',
@@ -387,31 +445,20 @@ export const ChatImpl = memo(
       }
 
       if (fileModifications !== undefined) {
-        /**
-         * If we have file modifications we append a new user message manually since we have to prefix
-         * the user input with the file modifications and we don't want the new user input to appear
-         * in the prompt. Using `append` is almost the same as `handleSubmit` except that we have to
-         * manually reset the input and we'd have to manually pass in file attachments. However, those
-         * aren't relevant here.
-         */
         append({
           role: 'user',
           content: [
             {
               type: 'text',
-              text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${_input}`,
+              text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${processedInput}`,
             },
-            ...imageDataList.map((imageData) => ({
+            ...(model !== 'o3-mini' ? imageDataList.map(imageData => ({
               type: 'image',
               image: imageData,
-            })),
-          ] as any, // Type assertion to bypass compiler check
+            })) : []),
+          ] as any,
         });
 
-        /**
-         * After sending a new message we reset all modifications since the model
-         * should now be aware of all the changes.
-         */
         workbenchStore.resetAllFileModifications();
       } else {
         append({
@@ -419,25 +466,21 @@ export const ChatImpl = memo(
           content: [
             {
               type: 'text',
-              text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${_input}`,
+              text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${processedInput}`,
             },
-            ...imageDataList.map((imageData) => ({
+            ...(model !== 'o3-mini' ? imageDataList.map(imageData => ({
               type: 'image',
               image: imageData,
-            })),
-          ] as any, // Type assertion to bypass compiler check
+            })) : []),
+          ] as any,
         });
       }
 
       setInput('');
       Cookies.remove(PROMPT_COOKIE_KEY);
-
-      // Add file cleanup here
       setUploadedFiles([]);
       setImageDataList([]);
-
       resetEnhancer();
-
       textareaRef.current?.blur();
     };
 
@@ -535,6 +578,8 @@ export const ChatImpl = memo(
         setImageDataList={setImageDataList}
         actionAlert={actionAlert}
         clearAlert={() => workbenchStore.clearAlert()}
+        reasoningEffort={reasoningEffort}
+        onReasoningEffortChange={onReasoningEffortChange}
       />
     );
   },

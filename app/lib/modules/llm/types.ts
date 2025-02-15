@@ -1,31 +1,42 @@
 import type { LanguageModelV1 } from 'ai';
 import type { IProviderSetting } from '~/types/model';
 
+export type ReasoningEffort = 'low' | 'medium' | 'high';
+
 export interface ModelInfo {
   name: string;
   label: string;
   provider: string;
   maxTokenAllowed: number;
+  supportsReasoning?: boolean;
+  supportsImages?: boolean;
+}
+
+export interface ProviderOptions {
+  reasoning_effort?: ReasoningEffort;
+  max_completion_tokens?: number;
 }
 
 export interface ProviderInfo {
   name: string;
   staticModels: ModelInfo[];
-  getDynamicModels?: (
-    apiKeys?: Record<string, string>,
-    settings?: IProviderSetting,
-    serverEnv?: Record<string, string>,
-  ) => Promise<ModelInfo[]>;
   getModelInstance: (options: {
     model: string;
     serverEnv: Env;
     apiKeys?: Record<string, string>;
     providerSettings?: Record<string, IProviderSetting>;
+    options?: ProviderOptions;
   }) => LanguageModelV1;
-  getApiKeyLink?: string;
-  labelForGetApiKey?: string;
-  icon?: string;
+  getApiKeyLink: string;
+  labelForGetApiKey: string;
+  icon: string;
+  getDynamicModels(
+    serverEnv: Env,
+    apiKeys?: Record<string, string>,
+    providerSettings?: Record<string, IProviderSetting>,
+  ): Promise<ModelInfo[]>;
 }
+
 export interface ProviderConfig {
   baseUrlKey?: string;
   baseUrl?: string;

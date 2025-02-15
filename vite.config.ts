@@ -18,22 +18,56 @@ const getGitHash = () => {
   }
 };
 
-
-
-
 export default defineConfig((config) => {
   return {
     define: {
       __COMMIT_HASH: JSON.stringify(getGitHash()),
       __APP_VERSION: JSON.stringify(process.env.npm_package_version),
-      // 'process.env': JSON.stringify(process.env)
+      'module': {},
+      'module.exports': {},
+      'process.env': {}
     },
     build: {
       target: 'esnext',
+      commonjsOptions: {
+        transformMixedEsModules: true
+      }
+    },
+    resolve: {
+      alias: {
+        path: 'path-browserify'
+      }
+    },
+    optimizeDeps: {
+      esbuildOptions: {
+        define: {
+          global: 'globalThis'
+        },
+        plugins: [
+          {
+            name: 'load-js-files-as-jsx',
+            setup(build) {
+              build.onLoad({ filter: /\.[jt]sx?$/ }, async (args) => ({
+                loader: 'jsx'
+              }))
+            }
+          }
+        ]
+      },
+      include: ['path-browserify']
     },
     plugins: [
       nodePolyfills({
-        include: ['path', 'buffer', 'process'],
+        include: ['path', 'buffer', 'process', 'util', 'stream', 'events'],
+        globals: {
+          Buffer: true,
+          global: true,
+          process: true
+        },
+        protocolImports: true,
+        overrides: {
+          path: 'path-browserify'
+        }
       }),
       config.mode !== 'test' && remixCloudflareDevProxy(),
       remixVitePlugin({
