@@ -3,18 +3,19 @@
  * Preventing TS checks with files presented in the video for a better presentation.
  */
 import type { Message } from 'ai';
-import React, { type RefCallback, useEffect, useState } from 'react';
+import React, { type RefCallback, useEffect, useState, forwardRef, useImperativeHandle, useRef } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { IconButton } from '~/components/ui/IconButton';
 import { Workbench } from '~/components/workbench/Workbench.client';
 import { classNames } from '~/utils/classNames';
-import { PROVIDER_LIST } from '~/utils/constants';
+import { PROVIDER_LIST, EXPERIMENTAL_PROVIDERS } from '~/utils/constants';
 import { Messages } from './Messages.client';
 import { SendButton } from './SendButton.client';
 import { APIKeyManager, getApiKeysFromCookies } from './APIKeyManager';
 import Cookies from 'js-cookie';
 import * as Tooltip from '@radix-ui/react-tooltip';
+import { useSettings } from '~/lib/hooks/useSettings';
 
 import styles from './BaseChat.module.scss';
 import { ExportChatButton } from '~/components/chat/chatExportAndImport/ExportChatButton';
@@ -22,14 +23,14 @@ import { ImportButtons } from '~/components/chat/chatExportAndImport/ImportButto
 import GitCloneButton from './GitCloneButton';
 
 import FilePreview from './FilePreview';
-import { ModelSelector } from '~/components/chat/ModelSelector';
+import { ModelSelector } from './ModelSelector';
 import { SpeechRecognitionButton } from '~/components/chat/SpeechRecognition';
-import type { ProviderInfo } from '~/types/model';
+import type { ProviderInfo } from '~/lib/modules/llm/types';
 import { ScreenshotStateManager } from './ScreenshotStateManager';
 import { toast } from 'react-toastify';
 import type { ActionAlert } from '~/types/actions';
 import ChatAlert from './ChatAlert';
-import type { ModelInfo } from '~/lib/modules/llm/types';
+import type { ModelInfo, ReasoningEffort } from '~/lib/modules/llm/types';
 
 const TEXTAREA_MIN_HEIGHT = 76;
 
@@ -62,6 +63,8 @@ interface BaseChatProps {
   setImageDataList?: (dataList: string[]) => void;
   actionAlert?: ActionAlert;
   clearAlert?: () => void;
+  reasoningEffort?: ReasoningEffort;
+  onReasoningEffortChange?: (effort: ReasoningEffort) => void;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -73,11 +76,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       showChat = true,
       chatStarted = false,
       isStreaming = false,
-      model,
+      model = '',
       setModel,
       provider,
       setProvider,
-      providerList,
+      providerList: initialProviderList,
       input = '',
       enhancingPrompt,
       handleInputChange,
@@ -95,9 +98,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       messages,
       actionAlert,
       clearAlert,
+      reasoningEffort,
+      onReasoningEffortChange,
     },
     ref,
   ) => {
+    const { isLocalModel } = useSettings();
     const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
     const [apiKeys, setApiKeys] = useState<Record<string, string>>(getApiKeysFromCookies());
     const [modelList, setModelList] = useState<ModelInfo[]>([]);
@@ -106,6 +112,14 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
     const [transcript, setTranscript] = useState('');
     const [isModelLoading, setIsModelLoading] = useState<string | undefined>('all');
+    const [selectedReasoningEffort, setSelectedReasoningEffort] = useState<ReasoningEffort>('medium');
+
+    // Use the provided provider list or filter based on local model setting
+    const availableProviders = initialProviderList ?? (
+      isLocalModel 
+        ? PROVIDER_LIST 
+        : PROVIDER_LIST.filter((p) => !EXPERIMENTAL_PROVIDERS.includes(p.name))
+    );
 
     useEffect(() => {
       console.log(transcript);
@@ -169,7 +183,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             setIsModelLoading(undefined);
           });
       }
-    }, [providerList, provider]);
+    }, [availableProviders, provider]);
 
     const onApiKeysChange = async (providerName: string, apiKey: string) => {
       const newApiKeys = { ...apiKeys, [providerName]: apiKey };
@@ -331,7 +345,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         </h1>
                       </div>
                       <p className="text-[min(4vw,1.5rem)] text-bolt-elements-textSecondary animate-fade-in animation-delay-200 max-w-[min(90vw,36rem)] mx-auto leading-relaxed">
-                        Transform your ideas into stunning websites with the power of AI
+                        Transform your ideas into stunning websites live
                       </p>
                     </div>
 
@@ -438,11 +452,16 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                             modelList={modelList}
                             provider={provider}
                             setProvider={setProvider}
-                            providerList={providerList || (PROVIDER_LIST as ProviderInfo[])}
+                            providerList={availableProviders}
                             apiKeys={apiKeys}
                             modelLoading={isModelLoading}
+                            reasoningEffort={selectedReasoningEffort}
+                            onReasoningEffortChange={(effort) => {
+                              setSelectedReasoningEffort(effort);
+                              onReasoningEffortChange?.(effort);
+                            }}
                           />
-                          {(providerList || []).length > 0 && provider && (
+                          {(availableProviders || []).length > 0 && provider && (
                             <APIKeyManager
                               provider={provider}
                               apiKey={apiKeys[provider.name] || ''}
@@ -552,7 +571,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         <SendButton
                           show={input.length > 0 || isStreaming || uploadedFiles.length > 0}
                           isStreaming={isStreaming}
-                          disabled={!providerList || providerList.length === 0}
+                          disabled={!availableProviders || availableProviders.length === 0}
                           onClick={(event) => {
                             if (isStreaming) {
                               handleStop?.();
@@ -610,7 +629,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                               !isModelSettingsCollapsed,
                           })}
                           onClick={() => setIsModelSettingsCollapsed(!isModelSettingsCollapsed)}
-                          disabled={!providerList || providerList.length === 0}
+                          disabled={!availableProviders || availableProviders.length === 0}
                         >
                           <div
                             className={`i-ph:caret-${isModelSettingsCollapsed ? 'right' : 'down'} text-lg group-hover:text-accent-500`}

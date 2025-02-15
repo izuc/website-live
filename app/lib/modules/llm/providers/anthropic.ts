@@ -7,6 +7,8 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 export default class AnthropicProvider extends BaseProvider {
   name = 'Anthropic';
   getApiKeyLink = 'https://console.anthropic.com/settings/keys';
+  labelForGetApiKey = 'Get Anthropic API Key';
+  icon = 'i-ph:robot';
 
   config = {
     apiTokenKey: 'ANTHROPIC_API_KEY',
@@ -29,11 +31,8 @@ export default class AnthropicProvider extends BaseProvider {
       name: 'claude-3-5-haiku-latest',
       label: 'Claude 3.5 Haiku (new)',
       provider: 'Anthropic',
-      maxTokenAllowed: 8000,
+      maxTokenAllowed: 4096,
     },
-    { name: 'claude-3-opus-latest', label: 'Claude 3 Opus', provider: 'Anthropic', maxTokenAllowed: 8000 },
-    { name: 'claude-3-sonnet-20240229', label: 'Claude 3 Sonnet', provider: 'Anthropic', maxTokenAllowed: 8000 },
-    { name: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku', provider: 'Anthropic', maxTokenAllowed: 8000 },
   ];
   getModelInstance: (options: {
     model: string;

@@ -12,7 +12,9 @@ export const PROMPT_COOKIE_KEY = 'cachedPrompt';
 const llmManager = LLMManager.getInstance(import.meta.env);
 
 export const PROVIDER_LIST = llmManager.getAllProviders();
-export const DEFAULT_PROVIDER = llmManager.getDefaultProvider();
+export const DEFAULT_PROVIDER = PROVIDER_LIST.find(p => p.name === 'Anthropic') || llmManager.getDefaultProvider();
+
+export const EXPERIMENTAL_PROVIDERS = ['LMStudio', 'OpenAILike', 'Ollama'];
 
 export const providerBaseUrlEnvKeys: Record<string, { baseUrlKey?: string; apiTokenKey?: string }> = {};
 PROVIDER_LIST.forEach((provider) => {

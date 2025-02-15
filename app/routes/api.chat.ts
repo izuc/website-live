@@ -1,19 +1,17 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { createDataStream, generateId } from 'ai';
-import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS, type FileMap } from '~/lib/.server/llm/constants';
+import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS, O3_MINI_MAX_TOKENS, type FileMap } from '~/lib/.server/llm/constants';
 import { CONTINUE_PROMPT } from '~/lib/common/prompts/prompts';
-import { streamText, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
+import { streamText, type Messages, type StreamingOptions, type ReasoningModelOptions, type StandardModelOptions } from '~/lib/.server/llm/stream-text';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import type { IProviderSetting } from '~/types/model';
 import { createScopedLogger } from '~/utils/logger';
 import { getFilePaths, selectContext } from '~/lib/.server/llm/select-context';
 import type { ContextAnnotation, ProgressAnnotation } from '~/types/context';
-import { WORK_DIR } from '~/utils/constants';
+import { WORK_DIR, DEFAULT_MODEL } from '~/utils/constants';
 import { createSummary } from '~/lib/.server/llm/create-summary';
-
-export async function action(args: ActionFunctionArgs) {
-  return chatAction(args);
-}
+import { convertToCoreMessages, type Message } from 'ai';
+import type { ReasoningEffort } from '~/lib/modules/llm/types';
 
 const logger = createScopedLogger('api.chat');
 
@@ -35,12 +33,14 @@ function parseCookies(cookieHeader: string): Record<string, string> {
   return cookies;
 }
 
-async function chatAction({ context, request }: ActionFunctionArgs) {
-  const { messages, files, promptId, contextOptimization } = await request.json<{
+export async function action({ context, request }: ActionFunctionArgs) {
+  const { messages, files, promptId, contextOptimization, reasoningEffort, model } = await request.json<{
     messages: Messages;
     files: any;
     promptId?: string;
     contextOptimization: boolean;
+    reasoningEffort?: ReasoningEffort;
+    model?: string;
   }>();
 
   const cookieHeader = request.headers.get('Cookie');
@@ -62,10 +62,13 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
   try {
     const totalMessageContent = messages.reduce((acc, message) => acc + message.content, '');
     logger.debug(`Total message length: ${totalMessageContent.split(' ').length}, words`);
+    logger.debug('Creating data stream...');
 
     const dataStream = createDataStream({
-      async execute(dataStream) {
+      execute: async (dataStream) => {
+        logger.debug('Execute function called');
         const filePaths = getFilePaths(files || {});
+        logger.debug(`File paths: ${JSON.stringify(filePaths)}`);
         let filteredFiles: FileMap | undefined = undefined;
         let summary: string | undefined = undefined;
 
@@ -158,76 +161,114 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           logger.debug('Context Buffer Updated');
         }
 
-        // Stream the text
-        const options: StreamingOptions = {
-          toolChoice: 'none',
-          onFinish: async ({ text: content, finishReason, usage }) => {
-            logger.debug('usage', JSON.stringify(usage));
+        logger.debug(`Using model: ${model}`);
+        logger.debug(`Reasoning effort value:`, reasoningEffort);
 
-            if (usage) {
-              cumulativeUsage.completionTokens += usage.completionTokens || 0;
-              cumulativeUsage.promptTokens += usage.promptTokens || 0;
-              cumulativeUsage.totalTokens += usage.totalTokens || 0;
-            }
+        // Define the onFinish callback
+        const onFinishCallback = async ({ text: content, finishReason, usage }: { 
+          text: string; 
+          finishReason?: string; 
+          usage?: { 
+            completionTokens?: number; 
+            promptTokens?: number; 
+            totalTokens?: number; 
+          }; 
+        }) => {
+          logger.debug('usage', JSON.stringify(usage));
 
-            if (finishReason !== 'length') {
-              dataStream.writeMessageAnnotation({
-                type: 'usage',
-                value: {
-                  completionTokens: cumulativeUsage.completionTokens,
-                  promptTokens: cumulativeUsage.promptTokens,
-                  totalTokens: cumulativeUsage.totalTokens,
-                },
-              });
-              await new Promise((resolve) => setTimeout(resolve, 0));
+          if (usage) {
+            cumulativeUsage.completionTokens += usage.completionTokens || 0;
+            cumulativeUsage.promptTokens += usage.promptTokens || 0;
+            cumulativeUsage.totalTokens += usage.totalTokens || 0;
+          }
 
-              // stream.close();
-              return;
-            }
-
-            if (stream.switches >= MAX_RESPONSE_SEGMENTS) {
-              throw Error('Cannot continue message: Maximum segments reached');
-            }
-
-            const switchesLeft = MAX_RESPONSE_SEGMENTS - stream.switches;
-
-            logger.info(`Reached max token limit (${MAX_TOKENS}): Continuing message (${switchesLeft} switches left)`);
-
-            messages.push({ id: generateId(), role: 'assistant', content });
-            messages.push({ id: generateId(), role: 'user', content: CONTINUE_PROMPT });
-
-            const result = await streamText({
-              messages,
-              env: context.cloudflare?.env,
-              options,
-              apiKeys,
-              files,
-              providerSettings,
-              promptId,
-              contextOptimization,
+          if (finishReason !== 'length') {
+            dataStream.writeMessageAnnotation({
+              type: 'usage',
+              value: {
+                completionTokens: cumulativeUsage.completionTokens,
+                promptTokens: cumulativeUsage.promptTokens,
+                totalTokens: cumulativeUsage.totalTokens,
+              },
             });
-
-            result.mergeIntoDataStream(dataStream);
-
-            (async () => {
-              for await (const part of result.fullStream) {
-                if (part.type === 'error') {
-                  const error: any = part.error;
-                  logger.error(`${error}`);
-
-                  return;
-                }
-              }
-            })();
+            await new Promise((resolve) => setTimeout(resolve, 0));
 
             return;
-          },
+          }
+
+          if (stream.switches >= MAX_RESPONSE_SEGMENTS) {
+            throw Error('Cannot continue message: Maximum segments reached');
+          }
+
+          const switchesLeft = MAX_RESPONSE_SEGMENTS - stream.switches;
+
+          logger.info(`Reached max token limit (${MAX_TOKENS}): Continuing message (${switchesLeft} switches left)`);
+
+          messages.push({ id: generateId(), role: 'assistant', content });
+          messages.push({ id: generateId(), role: 'user', content: CONTINUE_PROMPT });
+
+          // Create continuation options based on model
+          let continuationOptions: StreamingOptions;
+          if (model === 'o3-mini') {
+            logger.debug('Using o3-mini specific options for continuation');
+            logger.debug('Current reasoning effort:', reasoningEffort);
+            continuationOptions = {
+              max_completion_tokens: O3_MINI_MAX_TOKENS,
+              reasoning_effort: reasoningEffort || 'medium',
+              onFinish: onFinishCallback
+            };
+            logger.debug('Continuation options:', JSON.stringify(continuationOptions));
+          } else {
+            logger.debug('Using standard model options for continuation');
+            continuationOptions = {
+              maxTokens: MAX_TOKENS,
+              onFinish: onFinishCallback
+            };
+          }
+
+          logger.debug('Calling streamText for continuation with options:', JSON.stringify(continuationOptions));
+          const result = await streamText({
+            messages,
+            env: context.cloudflare?.env,
+            options: continuationOptions,
+            apiKeys,
+            files,
+            providerSettings,
+            promptId,
+            contextOptimization,
+            contextFiles: filteredFiles,
+            summary,
+          });
+
+          logger.debug('Got continuation result from streamText, merging into dataStream');
+          result.mergeIntoDataStream(dataStream);
+          logger.debug('Merged continuation result into dataStream');
         };
 
+        // Create initial options based on model
+        let streamOptions: StreamingOptions;
+        if (model === 'o3-mini') {
+          logger.debug('Using o3-mini specific options');
+          logger.debug('Initial reasoning effort:', reasoningEffort);
+          streamOptions = {
+            max_completion_tokens: O3_MINI_MAX_TOKENS,
+            reasoning_effort: reasoningEffort,
+            onFinish: onFinishCallback
+          };
+          logger.debug('Stream options:', JSON.stringify(streamOptions));
+        } else {
+          logger.debug('Using standard model options');
+          streamOptions = {
+            maxTokens: MAX_TOKENS,
+            onFinish: onFinishCallback
+          };
+        }
+
+        logger.debug('Calling streamText with options:', JSON.stringify(streamOptions));
         const result = await streamText({
           messages,
           env: context.cloudflare?.env,
-          options,
+          options: streamOptions,
           apiKeys,
           files,
           providerSettings,
@@ -237,29 +278,18 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           summary,
         });
 
-        (async () => {
-          for await (const part of result.fullStream) {
-            if (part.type === 'error') {
-              const error: any = part.error;
-              logger.error(`${error}`);
-
-              return;
-            }
-          }
-        })();
-
+        logger.debug('Got result from streamText, merging into dataStream');
         result.mergeIntoDataStream(dataStream);
+        logger.debug('Merged result into dataStream');
       },
-      onError: (error: any) => `Custom error: ${error.message}`,
-    }).pipeThrough(
-      new TransformStream({
-        transform: (chunk, controller) => {
-          // Convert the string stream to a byte stream
-          const str = typeof chunk === 'string' ? chunk : JSON.stringify(chunk);
-          controller.enqueue(encoder.encode(str));
-        },
-      }),
-    );
+      onError: (error: any) => `Custom error: ${error.message}`
+    }).pipeThrough(new TransformStream({
+      transform: (chunk, controller) => {
+        // Convert the string stream to a byte stream
+        const str = typeof chunk === 'string' ? chunk : JSON.stringify(chunk);
+        controller.enqueue(encoder.encode(str));
+      }
+    }));
 
     return new Response(dataStream, {
       status: 200,

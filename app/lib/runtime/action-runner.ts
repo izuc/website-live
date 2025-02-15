@@ -223,6 +223,10 @@ export class ActionRunner {
       unreachable('Expected shell action');
     }
 
+    if (!this.#shellTerminal) {
+      unreachable('Shell terminal not found');
+    }
+
     const shell = this.#shellTerminal();
     await shell.ready();
 
@@ -230,11 +234,19 @@ export class ActionRunner {
       unreachable('Shell terminal not found');
     }
 
-    const resp = await shell.executeCommand(this.runnerId.get(), action.content, () => {
+    const wc = await this.#webcontainer;
+    const workdir = wc.workdir;
+
+    // Execute the command in the correct directory
+    const fullCommand = `cd ${workdir} && ${action.content}`;
+    logger.debug('Executing command:', fullCommand);
+    
+    const resp = await shell.executeCommand(this.runnerId.get(), fullCommand, () => {
       logger.debug(`[${action.type}]:Aborting Action\n\n`, action);
       action.abort();
     });
-    logger.debug(`${action.type} Shell Response: [exit code:${resp?.exitCode}]`);
+    
+    logger.debug(`${action.type} Shell Response: [exit code:${resp?.exitCode}] in directory ${workdir}`);
 
     if (resp?.exitCode != 0) {
       throw new ActionCommandError(`Failed To Execute Shell Command`, resp?.output || 'No Output Available');
@@ -243,7 +255,7 @@ export class ActionRunner {
 
   async #runStartAction(action: ActionState) {
     if (action.type !== 'start') {
-      unreachable('Expected shell action');
+      unreachable('Expected start action');
     }
 
     if (!this.#shellTerminal) {
@@ -257,7 +269,44 @@ export class ActionRunner {
       unreachable('Shell terminal not found');
     }
 
-    const resp = await shell.executeCommand(this.runnerId.get(), action.content, () => {
+    const wc = await this.#webcontainer;
+    const workdir = wc.workdir;
+
+    // Check if package.json exists and install dependencies if needed
+    try {
+      let packageJsonExists = false;
+      try {
+        const files = await wc.fs.readdir('.');
+        packageJsonExists = files.includes('package.json');
+      } catch (error) {
+        logger.debug('Error checking for package.json:', error);
+      }
+
+      if (packageJsonExists) {
+        logger.debug('Installing dependencies before starting application');
+        const installCommand = `cd ${workdir} && npm install`;
+        logger.debug('Executing install command:', installCommand);
+        
+        // Execute npm install and wait for it to complete
+        const installResp = await shell.executeCommand(this.runnerId.get(), installCommand, () => {});
+        
+        if (installResp?.exitCode !== 0) {
+          throw new Error(`Failed to install dependencies: ${installResp?.output || 'No output available'}`);
+        }
+        logger.debug('Dependencies installed successfully');
+        
+        // Add a longer delay to ensure installation is complete
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    } catch (error: any) {
+      logger.error('Failed to initialize project:', error);
+      throw new ActionCommandError('Failed to initialize project', error.message || String(error));
+    }
+
+    // Execute the start command
+    const fullCommand = `cd ${workdir} && ${action.content}`;
+    logger.debug('Executing start command:', fullCommand);
+    const resp = await shell.executeCommand(this.runnerId.get(), fullCommand, () => {
       logger.debug(`[${action.type}]:Aborting Action\n\n`, action);
       action.abort();
     });
@@ -276,10 +325,14 @@ export class ActionRunner {
     }
 
     const webcontainer = await this.#webcontainer;
-    const relativePath = nodePath.relative(webcontainer.workdir, action.filePath);
-
+    const workdir = '/home/project';
+    
+    // Convert the path to be relative to the workdir
+    const fullPath = action.filePath.startsWith('/') ? action.filePath : `${workdir}/${action.filePath}`;
+    const relativePath = fullPath.replace(workdir, '').replace(/^\/+/, '');
+    
     let folder = nodePath.dirname(relativePath);
-
+    
     // remove trailing slashes
     folder = folder.replace(/\/+$/g, '');
 
@@ -297,6 +350,7 @@ export class ActionRunner {
       logger.debug(`File written ${relativePath}`);
     } catch (error) {
       logger.error('Failed to write file\n\n', error);
+      throw error;
     }
   }
   #updateAction(id: string, newState: ActionStateUpdate) {
