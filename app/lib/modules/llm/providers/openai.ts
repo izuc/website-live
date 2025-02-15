@@ -1,7 +1,7 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo, ProviderOptions } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModelV1 } from '@ai-sdk/provider';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createScopedLogger } from '~/utils/logger';
 

@@ -1,4 +1,4 @@
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModelV1 } from '@ai-sdk/provider';
 import type { IProviderSetting } from '~/types/model';
 
 export type ReasoningEffort = 'low' | 'medium' | 'high';
@@ -35,6 +35,19 @@ export interface ProviderInfo {
     apiKeys?: Record<string, string>,
     providerSettings?: Record<string, IProviderSetting>,
   ): Promise<ModelInfo[]>;
+  getModelsFromCache?(options: {
+    apiKeys?: Record<string, string>;
+    providerSettings?: Record<string, IProviderSetting>;
+    serverEnv?: Record<string, string>;
+  }): ModelInfo[] | null;
+  storeDynamicModels?(
+    options: {
+      apiKeys?: Record<string, string>;
+      providerSettings?: Record<string, IProviderSetting>;
+      serverEnv?: Record<string, string>;
+    },
+    models: ModelInfo[],
+  ): void;
 }
 
 export interface ProviderConfig {

@@ -1,41 +1,51 @@
-import { generateText, type CoreTool, type GenerateTextResult, type Message } from 'ai';
+import { generateText } from 'ai';
 import type { IProviderSetting } from '~/types/model';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROVIDER_LIST } from '~/utils/constants';
-import { extractCurrentContext, extractPropertiesFromMessage, simplifyBoltActions } from './utils';
+import { extractCurrentContext, extractPropertiesFromMessage, simplifyBoltActions, type Message } from './utils';
 import { createScopedLogger } from '~/utils/logger';
 import { LLMManager } from '~/lib/modules/llm/manager';
+import type { LanguageModelV1Message, LanguageModelV1StreamPart } from '@ai-sdk/provider';
+import { wrapLanguageModel } from '~/lib/modules/llm/stream-transformer';
 
 const logger = createScopedLogger('create-summary');
 
-export async function createSummary(props: {
+export async function createSummary({
+  messages,
+  env,
+  apiKeys,
+  providerSettings,
+  promptId,
+  contextOptimization,
+  onFinish,
+}: {
   messages: Message[];
-  env?: Env;
-  apiKeys?: Record<string, string>;
-  providerSettings?: Record<string, IProviderSetting>;
+  env: any;
+  apiKeys: Record<string, string>;
+  providerSettings: Record<string, IProviderSetting>;
   promptId?: string;
-  contextOptimization?: boolean;
-  onFinish?: (resp: GenerateTextResult<Record<string, CoreTool<any, any>>, never>) => void;
-}) {
-  const { messages, env: serverEnv, apiKeys, providerSettings, contextOptimization, onFinish } = props;
+  contextOptimization: boolean;
+  onFinish?: (response: { usage?: { completionTokens?: number; promptTokens?: number; totalTokens?: number } }) => void;
+}): Promise<string> {
+  if (!env) {
+    throw new Error('Server environment is required for creating summary');
+  }
+
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
+  
   const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
       const { model, provider, content } = extractPropertiesFromMessage(message);
       currentModel = model;
       currentProvider = provider;
-
       return { ...message, content };
-    } else if (message.role == 'assistant') {
+    } else if (message.role === 'assistant') {
       let content = message.content;
-
       if (contextOptimization) {
-        content = simplifyBoltActions(content);
+        content = typeof content === 'string' ? simplifyBoltActions(content) : content;
       }
-
       return { ...message, content };
     }
-
     return message;
   });
 
@@ -49,7 +59,7 @@ export async function createSummary(props: {
       ...(await LLMManager.getInstance().getModelListFromProvider(provider, {
         apiKeys,
         providerSettings,
-        serverEnv: serverEnv as any,
+        serverEnv: env as any,
       })),
     ];
 
@@ -98,7 +108,7 @@ ${summary.summary}`;
       : message.content;
 
   // select files from the list of code file from the project that might be useful for the current request from the user
-  const resp = await generateText({
+  const resp = await (generateText as any)({
     system: `
         You are a software engineer. You are working on a project. tou need to summarize the work till now and provide a summary of the chat till now.
 
@@ -120,18 +130,18 @@ ${slicedMessages
   .join('\n')}
 ---
 `,
-    model: provider.getModelInstance({
+    model: wrapLanguageModel(provider.getModelInstance({
       model: currentModel,
-      serverEnv,
+      serverEnv: env,
       apiKeys,
       providerSettings,
-    }),
+    })),
   });
 
   const response = resp.text;
 
   if (onFinish) {
-    onFinish(resp);
+    onFinish(resp as any);
   }
 
   return response;

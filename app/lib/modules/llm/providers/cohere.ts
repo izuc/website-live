@@ -1,11 +1,13 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModelV1 } from '@ai-sdk/provider';
 import { createCohere } from '@ai-sdk/cohere';
 
 export default class CohereProvider extends BaseProvider {
   name = 'Cohere';
+  labelForGetApiKey = 'Cohere API Key';
+  icon = '/images/providers/cohere.svg';
   getApiKeyLink = 'https://dashboard.cohere.com/api-keys';
 
   config = {

@@ -1,11 +1,14 @@
 import { BaseProvider, getOpenAILikeModel } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModelV1, LanguageModelV1Message, LanguageModelV1ProviderMetadata } from '@ai-sdk/provider';
+import { wrapLanguageModel } from '../stream-transformer';
 
 export default class TogetherProvider extends BaseProvider {
   name = 'Together';
   getApiKeyLink = 'https://api.together.xyz/settings/api-keys';
+  labelForGetApiKey = 'Get Together API Key';
+  icon = '/images/providers/together.svg';
 
   config = {
     baseUrlKey: 'TOGETHER_API_BASE_URL',
@@ -34,22 +37,30 @@ export default class TogetherProvider extends BaseProvider {
   ];
 
   async getDynamicModels(
+    serverEnv: Env,
     apiKeys?: Record<string, string>,
-    settings?: IProviderSetting,
-    serverEnv: Record<string, string> = {},
+    providerSettings?: Record<string, IProviderSetting>,
   ): Promise<ModelInfo[]> {
-    const { baseUrl: fetchBaseUrl, apiKey } = this.getProviderBaseUrlAndKey({
+    const { apiKey } = this.getProviderBaseUrlAndKey({
       apiKeys,
-      providerSettings: settings,
+      providerSettings,
       serverEnv,
+      defaultBaseUrlKey: '',
+      defaultApiTokenKey: 'TOGETHER_API_KEY',
+    });
+
+    if (!apiKey) {
+      return [];
+    }
+
+    const { baseUrl: fetchBaseUrl } = this.getProviderBaseUrlAndKey({
+      apiKeys,
+      providerSettings: providerSettings?.[this.name],
+      serverEnv: serverEnv as any,
       defaultBaseUrlKey: 'TOGETHER_API_BASE_URL',
       defaultApiTokenKey: 'TOGETHER_API_KEY',
     });
     const baseUrl = fetchBaseUrl || 'https://api.together.xyz/v1';
-
-    if (!baseUrl || !apiKey) {
-      return [];
-    }
 
     // console.log({ baseUrl, apiKey });
 
@@ -70,14 +81,17 @@ export default class TogetherProvider extends BaseProvider {
     }));
   }
 
-  getModelInstance(options: {
+  getModelInstance({
+    model,
+    serverEnv,
+    apiKeys,
+    providerSettings,
+  }: {
     model: string;
-    serverEnv: Env;
+    serverEnv?: Env;
     apiKeys?: Record<string, string>;
     providerSettings?: Record<string, IProviderSetting>;
   }): LanguageModelV1 {
-    const { model, serverEnv, apiKeys, providerSettings } = options;
-
     const { baseUrl, apiKey } = this.getProviderBaseUrlAndKey({
       apiKeys,
       providerSettings: providerSettings?.[this.name],
@@ -90,6 +104,7 @@ export default class TogetherProvider extends BaseProvider {
       throw new Error(`Missing configuration for ${this.name} provider`);
     }
 
-    return getOpenAILikeModel(baseUrl, apiKey, model);
+    const together = getOpenAILikeModel(baseUrl, apiKey, model);
+    return wrapLanguageModel(together);
   }
 }

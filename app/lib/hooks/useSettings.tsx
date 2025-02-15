@@ -12,7 +12,7 @@ import {
 } from '~/lib/stores/settings';
 import { useCallback, useEffect, useState } from 'react';
 import Cookies from 'js-cookie';
-import type { IProviderSetting, ProviderInfo } from '~/types/model';
+import type { IProviderSetting, ProviderInfo, IProviderConfig } from '~/types/model';
 import { logStore } from '~/lib/stores/logs'; // assuming logStore is imported from this location
 
 interface CommitData {
@@ -35,6 +35,19 @@ export function useSettings() {
   const autoSelectTemplate = useStore(autoSelectStarterTemplate);
   const [activeProviders, setActiveProviders] = useState<ProviderInfo[]>([]);
   const contextOptimizationEnabled = useStore(enableContextOptimizationStore);
+
+  // Helper function to convert IProviderConfig to ProviderInfo
+  const toProviderInfo = (provider: IProviderConfig): ProviderInfo => ({
+    name: provider.name,
+    staticModels: provider.staticModels,
+    getApiKeyLink: provider.getApiKeyLink,
+    labelForGetApiKey: provider.labelForGetApiKey,
+    icon: provider.icon,
+    getModelInstance: () => { throw new Error('Not implemented in UI'); },
+    getDynamicModels: async () => [],
+    getModelsFromCache: () => null,
+    storeDynamicModels: () => {}
+  });
 
   // Function to check if we're on stable version
   const checkIsStableVersion = async () => {
@@ -149,7 +162,7 @@ export function useSettings() {
   useEffect(() => {
     let active = Object.entries(providers)
       .filter(([_key, provider]) => provider.settings.enabled)
-      .map(([_k, p]) => p);
+      .map(([_k, p]) => toProviderInfo(p));
 
     if (!isLocalModel) {
       active = active.filter((p) => !LOCAL_PROVIDERS.includes(p.name));

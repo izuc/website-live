@@ -1,4 +1,5 @@
-import { type ActionFunctionArgs } from '@remix-run/cloudflare';
+import { json } from '@remix-run/cloudflare';
+import type { ActionFunctionArgs } from '@remix-run/cloudflare';
 import { createDataStream, generateId } from 'ai';
 import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS, O3_MINI_MAX_TOKENS, type FileMap } from '~/lib/.server/llm/constants';
 import { CONTINUE_PROMPT } from '~/lib/common/prompts/prompts';
@@ -8,12 +9,44 @@ import type { IProviderSetting } from '~/types/model';
 import { createScopedLogger } from '~/utils/logger';
 import { getFilePaths, selectContext } from '~/lib/.server/llm/select-context';
 import type { ContextAnnotation, ProgressAnnotation } from '~/types/context';
-import { WORK_DIR, DEFAULT_MODEL } from '~/utils/constants';
+import { WORK_DIR } from '~/utils/constants';
 import { createSummary } from '~/lib/.server/llm/create-summary';
-import { convertToCoreMessages, type Message } from 'ai';
 import type { ReasoningEffort } from '~/lib/modules/llm/types';
+import type { Message, SystemMessage, UserMessage, AssistantMessage, ToolMessage } from '~/lib/.server/llm/utils';
+import { toLanguageModelV1Message } from '~/lib/.server/llm/utils';
+import type { Message as AiMessage } from 'ai';
+import type { LanguageModelV1TextPart, LanguageModelV1ImagePart, LanguageModelV1FilePart, LanguageModelV1ToolCallPart, LanguageModelV1ToolResultPart } from '@ai-sdk/provider';
 
 const logger = createScopedLogger('api.chat');
+
+type MessageContent = LanguageModelV1TextPart | LanguageModelV1ImagePart | LanguageModelV1FilePart | LanguageModelV1ToolCallPart | LanguageModelV1ToolResultPart;
+
+function isTextPart(part: MessageContent): part is LanguageModelV1TextPart {
+  return 'type' in part && part.type === 'text' && 'text' in part;
+}
+
+const convertToAiMessage = (msg: Message) => {
+  const role = msg.role === 'tool' ? 'assistant' : msg.role;
+  let content = '';
+  
+  if (Array.isArray(msg.content)) {
+    for (const part of msg.content) {
+      const typedPart = part as MessageContent;
+      if (isTextPart(typedPart)) {
+        content = typedPart.text;
+        break;
+      }
+    }
+  } else {
+    content = msg.content;
+  }
+  
+  return {
+    role,
+    content,
+    id: msg.id
+  };
+};
 
 function parseCookies(cookieHeader: string): Record<string, string> {
   const cookies: Record<string, string> = {};
@@ -81,11 +114,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
             message: 'Generating Chat Summary',
           } as ProgressAnnotation);
 
-          // Create a summary of the chat
-          console.log(`Messages count: ${messages.length}`);
+          // Convert messages to ai package Message format
+          const aiMessages = messages.map(msg => convertToAiMessage(msg as Message));
+          const lastMessageId = (messages[messages.length - 1] as Message)?.id;
 
           summary = await createSummary({
-            messages: [...messages],
+            messages: aiMessages,
             env: context.cloudflare?.env,
             apiKeys,
             providerSettings,
@@ -104,7 +138,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           dataStream.writeMessageAnnotation({
             type: 'chatSummary',
             summary,
-            chatId: messages.slice(-1)?.[0]?.id,
+            chatId: lastMessageId,
           } as ContextAnnotation);
 
           // Update context buffer
@@ -117,9 +151,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
           // Select context files
           console.log(`Messages count: ${messages.length}`);
-          filteredFiles = await selectContext({
-            messages: [...messages],
-            env: context.cloudflare?.env,
+          const contextResult = await selectContext({
+            messages: aiMessages,
+            env: context.cloudflare?.env as any,
             apiKeys,
             files,
             providerSettings,
@@ -136,22 +170,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
             },
           });
 
-          if (filteredFiles) {
-            logger.debug(`files in context : ${JSON.stringify(Object.keys(filteredFiles))}`);
-          }
+          filteredFiles = contextResult.files;
 
+          // Write code context annotation
           dataStream.writeMessageAnnotation({
             type: 'codeContext',
-            files: Object.keys(filteredFiles).map((key) => {
-              let path = key;
-
-              if (path.startsWith(WORK_DIR)) {
-                path = path.replace(WORK_DIR, '');
-              }
-
-              return path;
-            }),
-          } as ContextAnnotation);
+            files: Object.keys(filteredFiles || {}),
+          });
 
           dataStream.writeMessageAnnotation({
             type: 'progress',
@@ -204,8 +229,21 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
           logger.info(`Reached max token limit (${MAX_TOKENS}): Continuing message (${switchesLeft} switches left)`);
 
-          messages.push({ id: generateId(), role: 'assistant', content });
-          messages.push({ id: generateId(), role: 'user', content: CONTINUE_PROMPT });
+          const assistantMessage: AssistantMessage = {
+            role: 'assistant',
+            content: [{ type: 'text', text: content }],
+            id: `assistant-${Date.now()}-${Math.random().toString(36).substring(2)}`,
+            providerMetadata: {}
+          };
+          messages.push(toLanguageModelV1Message(assistantMessage));
+
+          const userMessage: UserMessage = {
+            role: 'user',
+            content: [{ type: 'text', text: CONTINUE_PROMPT }],
+            id: `user-${Date.now()}-${Math.random().toString(36).substring(2)}`,
+            providerMetadata: {}
+          };
+          messages.push(toLanguageModelV1Message(userMessage));
 
           // Create continuation options based on model
           let continuationOptions: StreamingOptions;
@@ -294,10 +332,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return new Response(dataStream, {
       status: 200,
       headers: {
-        'Content-Type': 'text/event-stream; charset=utf-8',
-        Connection: 'keep-alive',
-        'Cache-Control': 'no-cache',
-        'Text-Encoding': 'chunked',
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'Content-Encoding': 'none',
+        'X-Accel-Buffering': 'no',
+        'Transfer-Encoding': 'chunked'
       },
     });
   } catch (error: any) {

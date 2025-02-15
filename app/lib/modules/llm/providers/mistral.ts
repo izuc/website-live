@@ -1,12 +1,14 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModelV1 } from '@ai-sdk/provider';
 import { createMistral } from '@ai-sdk/mistral';
 
 export default class MistralProvider extends BaseProvider {
   name = 'Mistral';
-  getApiKeyLink = 'https://console.mistral.ai/api-keys/';
+  labelForGetApiKey = 'Mistral API Key';
+  icon = '/images/providers/mistral.svg';
+  getApiKeyLink = 'https://console.mistral.ai/api-keys';
 
   config = {
     apiTokenKey: 'MISTRAL_API_KEY',

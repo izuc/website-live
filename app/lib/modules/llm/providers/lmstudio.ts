@@ -1,9 +1,10 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo, ProviderOptions } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
+import type { LanguageModelV1, LanguageModelV1Message, LanguageModelV1ProviderMetadata } from '@ai-sdk/provider';
 import { createOpenAI } from '@ai-sdk/openai';
-import type { LanguageModelV1 } from 'ai';
 import { createScopedLogger } from '~/utils/logger';
+import { wrapLanguageModel } from '../stream-transformer';
 
 const logger = createScopedLogger('lmstudio-provider');
 
@@ -16,10 +17,10 @@ interface GetModelInstanceParams {
 }
 
 export default class LMStudioProvider extends BaseProvider {
-  name = 'LMStudio';
+  name = 'LM Studio';
   getApiKeyLink = 'https://lmstudio.ai/';
-  labelForGetApiKey = 'Get LMStudio';
-  icon = 'i-ph:cloud-arrow-down';
+  labelForGetApiKey = 'Get LM Studio API Key';
+  icon = '/images/providers/lmstudio.svg';
 
   config = {
     apiTokenKey: '',
@@ -110,6 +111,6 @@ export default class LMStudioProvider extends BaseProvider {
       return originalDoStream.call(modelInstance, params);
     };
 
-    return modelInstance;
+    return wrapLanguageModel(modelInstance);
   };
 }

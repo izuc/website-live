@@ -1,6 +1,6 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModelV1 } from '@ai-sdk/provider';
 import type { IProviderSetting } from '~/types/model';
 import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
 
@@ -12,8 +12,10 @@ interface AWSBedRockConfig {
 }
 
 export default class AmazonBedrockProvider extends BaseProvider {
-  name = 'AmazonBedrock';
-  getApiKeyLink = 'https://console.aws.amazon.com/iam/home';
+  name = 'Amazon Bedrock';
+  labelForGetApiKey = 'Amazon Bedrock API Key';
+  icon = '/images/providers/amazon.svg';
+  getApiKeyLink = 'https://docs.aws.amazon.com/bedrock/latest/userguide/setting-up.html';
 
   config = {
     apiTokenKey: 'AWS_BEDROCK_CONFIG',

@@ -8,6 +8,8 @@ import { LLMManager } from '~/lib/modules/llm/manager';
 import type { ModelInfo, ReasoningEffort, ProviderInfo } from '~/lib/modules/llm/types';
 import { getApiKeysFromCookie, getProviderSettingsFromCookie } from '~/lib/api/cookies';
 import { type LanguageModelV1StreamPart, type LanguageModelV1CallOptions, type LanguageModelV1Message } from '@ai-sdk/provider';
+import type { Env } from '~/lib/.server/llm/select-context';
+import { json } from '@remix-run/cloudflare';
 
 function transformStream(stream: ReadableStream<LanguageModelV1StreamPart>): ReadableStream<LanguageModelV1StreamPart> {
   return new ReadableStream({
@@ -37,120 +39,47 @@ function transformStream(stream: ReadableStream<LanguageModelV1StreamPart>): Rea
   });
 }
 
-export const action = async ({ request, context }: ActionFunctionArgs) => {
-  try {
-    const formData = await request.formData();
-    const message = formData.get('message')?.toString() || '';
-    const model = formData.get('model')?.toString() || '';
-    const systemMessage = formData.get('system')?.toString() || '';
-    const reasoningEffort = (formData.get('reasoning_effort')?.toString() || 'auto') as ReasoningEffort;
-    const apiKeys = JSON.parse(formData.get('api_keys')?.toString() || '{}');
-    const providerSettings = JSON.parse(formData.get('provider_settings')?.toString() || '{}');
-
-    if (!message || !model) {
-      return new Response('Missing required fields', { status: 400 });
-    }
-
-    const llmManager = LLMManager.getInstance(import.meta.env);
-    const modelInfo = llmManager.getModelList().find(m => m.name === model);
-    
-    if (!modelInfo) {
-      return new Response('Model not found', { status: 400 });
-    }
-
-    const provider = llmManager.getProvider(modelInfo.provider);
-    
-    if (!provider) {
-      return new Response('Provider not found', { status: 400 });
-    }
-
-    const modelInstance = provider.getModelInstance({
-      model,
-      serverEnv: context.cloudflare?.env as any,
-      apiKeys,
-      providerSettings,
-    });
-
-    const streamOptions = {
-      maxTokens: MAX_TOKENS,
-      reasoning_effort: reasoningEffort,
-    };
-
-    const response = await modelInstance.doStream({
-      inputFormat: 'messages',
-      mode: {
-        type: 'regular'
-      },
-      prompt: [
-        {
-          role: 'system' as const,
-          content: systemMessage,
-        },
-        {
-          role: 'user' as const,
-          content: [{
-            type: 'text' as const,
-            text: message,
-          }],
-        },
-      ],
-      maxTokens: MAX_TOKENS,
-      providerMetadata: {
-        'ai-sdk': {
-          reasoning_effort: reasoningEffort,
-        },
-      },
-    });
-
-    // Transform the stream to ensure compatibility
-    const transformedStream = transformStream(response.stream);
-
-    return new Response(
-      new ReadableStream({
-        async start(controller) {
-          const reader = transformedStream.getReader();
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) {
-                controller.close();
-                break;
-              }
-              if ('textDelta' in value) {
-                controller.enqueue(value.textDelta);
-              }
-            }
-          } catch (e) {
-            controller.error(e);
-          }
-        }
-      }),
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-        },
-      }
-    );
-
-  } catch (error) {
-    console.error('Error in llmcall:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+function parseCookies(cookieHeader: string): Record<string, string> {
+  const cookies: Record<string, string> = {};
+  
+  if (!cookieHeader) {
+    return cookies;
   }
-};
+
+  cookieHeader.split(';').forEach(cookie => {
+    const parts = cookie.split('=');
+    const name = parts[0]?.trim();
+    const value = parts[1]?.trim();
+    if (name && value) {
+      cookies[name] = value;
+    }
+  });
+
+  return cookies;
+}
 
 async function getModelList(options: {
   apiKeys?: Record<string, string>;
   providerSettings?: Record<string, IProviderSetting>;
-  serverEnv?: Record<string, string>;
+  serverEnv?: Env;
 }) {
-  const llmManager = LLMManager.getInstance(import.meta.env);
+  const llmManager = LLMManager.getInstance();
   return llmManager.updateModelList(options);
+}
+
+export async function action({ context, request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  const serverEnv = context.env as Env;
+  const apiKeys = parseCookies(request.headers.get('cookie') || '');
+  const providerSettings = JSON.parse(formData.get('providerSettings')?.toString() || '{}');
+
+  const modelList = await getModelList({
+    apiKeys,
+    providerSettings,
+    serverEnv,
+  });
+
+  return json({ modelList });
 }
 
 async function llmCallAction({ context, request }: ActionFunctionArgs) {

@@ -1,12 +1,14 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModelV1 } from '@ai-sdk/provider';
 import { createOpenAI } from '@ai-sdk/openai';
 
 export default class HyperbolicProvider extends BaseProvider {
   name = 'Hyperbolic';
-  getApiKeyLink = 'https://app.hyperbolic.xyz/settings';
+  getApiKeyLink = 'https://hyperbolic.ai/api-keys';
+  labelForGetApiKey = 'Get Hyperbolic API Key';
+  icon = '/images/providers/hyperbolic.svg';
 
   config = {
     apiTokenKey: 'HYPERBOLIC_API_KEY',
@@ -46,18 +48,18 @@ export default class HyperbolicProvider extends BaseProvider {
   ];
 
   async getDynamicModels(
+    serverEnv: Env,
     apiKeys?: Record<string, string>,
-    settings?: IProviderSetting,
-    serverEnv: Record<string, string> = {},
+    providerSettings?: Record<string, IProviderSetting>,
   ): Promise<ModelInfo[]> {
-    const { baseUrl: fetchBaseUrl, apiKey } = this.getProviderBaseUrlAndKey({
+    const { apiKey } = this.getProviderBaseUrlAndKey({
       apiKeys,
-      providerSettings: settings,
+      providerSettings,
       serverEnv,
       defaultBaseUrlKey: '',
       defaultApiTokenKey: 'HYPERBOLIC_API_KEY',
     });
-    const baseUrl = fetchBaseUrl || 'https://api.hyperbolic.xyz/v1';
+    const baseUrl = apiKey ? 'https://api.hyperbolic.xyz/v1' : '';
 
     if (!apiKey) {
       throw `Missing Api Key configuration for ${this.name} provider`;

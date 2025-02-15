@@ -1,12 +1,14 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModelV1 } from '@ai-sdk/provider';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
 export default class GoogleProvider extends BaseProvider {
   name = 'Google';
-  getApiKeyLink = 'https://aistudio.google.com/app/apikey';
+  labelForGetApiKey = 'Google API Key';
+  icon = '/images/providers/google.svg';
+  getApiKeyLink = 'https://console.cloud.google.com/apis/credentials';
 
   config = {
     apiTokenKey: 'GOOGLE_GENERATIVE_AI_API_KEY',

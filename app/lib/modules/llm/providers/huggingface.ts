@@ -1,12 +1,14 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModelV1 } from '@ai-sdk/provider';
 import { createOpenAI } from '@ai-sdk/openai';
 
 export default class HuggingFaceProvider extends BaseProvider {
   name = 'HuggingFace';
   getApiKeyLink = 'https://huggingface.co/settings/tokens';
+  labelForGetApiKey = 'Get HuggingFace API Key';
+  icon = '/images/providers/huggingface.svg';
 
   config = {
     apiTokenKey: 'HuggingFace_API_KEY',

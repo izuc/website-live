@@ -1,7 +1,7 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModelV1 } from '@ai-sdk/provider';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 
 interface OpenRouterModel {
@@ -20,7 +20,9 @@ interface OpenRouterModelsResponse {
 
 export default class OpenRouterProvider extends BaseProvider {
   name = 'OpenRouter';
-  getApiKeyLink = 'https://openrouter.ai/settings/keys';
+  getApiKeyLink = 'https://openrouter.ai/keys';
+  labelForGetApiKey = 'Get OpenRouter API Key';
+  icon = '/images/providers/openrouter.svg';
 
   config = {
     apiTokenKey: 'OPEN_ROUTER_API_KEY',
@@ -74,10 +76,18 @@ export default class OpenRouterProvider extends BaseProvider {
   ];
 
   async getDynamicModels(
-    _apiKeys?: Record<string, string>,
-    _settings?: IProviderSetting,
-    _serverEnv: Record<string, string> = {},
+    serverEnv: Env,
+    apiKeys?: Record<string, string>,
+    providerSettings?: Record<string, IProviderSetting>,
   ): Promise<ModelInfo[]> {
+    const { apiKey } = this.getProviderBaseUrlAndKey({
+      apiKeys,
+      providerSettings: providerSettings?.[this.name],
+      serverEnv: serverEnv as any,
+      defaultBaseUrlKey: '',
+      defaultApiTokenKey: 'OPENROUTER_API_KEY',
+    });
+
     try {
       const response = await fetch('https://openrouter.ai/api/v1/models', {
         headers: {

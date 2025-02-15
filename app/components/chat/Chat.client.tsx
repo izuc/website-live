@@ -121,10 +121,14 @@ export const ChatImpl = memo(
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
-    const [uploadedFiles, setUploadedFiles] = useState<File[]>([]); // Move here
-    const [imageDataList, setImageDataList] = useState<string[]>([]); // Move here
+    const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+    const [imageDataList, setImageDataList] = useState<string[]>([]);
     const [searchParams, setSearchParams] = useSearchParams();
     const [fakeLoading, setFakeLoading] = useState(false);
+    const [streamState, setStreamState] = useState<'idle' | 'streaming' | 'error' | 'completed'>('idle');
+    const streamStateRef = useRef<'idle' | 'streaming' | 'error' | 'completed'>('idle');
+    const loadingRef = useRef(false);
+    const messageCountRef = useRef(0);
     const files = useStore(workbenchStore.files);
     const actionAlert = useStore(workbenchStore.alert);
     const { activeProviders, promptId, autoSelectTemplate, contextOptimizationEnabled } = useSettings();
@@ -139,9 +143,7 @@ export const ChatImpl = memo(
     });
 
     const { showChat } = useStore(chatStore);
-
     const [animationScope, animate] = useAnimate();
-
     const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
 
     const { messages, isLoading, input, handleInputChange, setInput, stop, append, setMessages, reload, error } =
@@ -154,33 +156,176 @@ export const ChatImpl = memo(
           contextOptimization: contextOptimizationEnabled,
           max_completion_tokens: model === 'o3-mini' ? 8000 : undefined,
           reasoningEffort,
-          model
+          model,
+          provider: provider.name
         },
         sendExtraMessageFields: true,
-        onError: (e) => {
-          logger.error('Request failed\n\n', e, error);
-          toast.error(
-            'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
-          );
-        },
-        onFinish: (message, response) => {
-          const usage = response.usage;
+        id: Date.now().toString(),
+        onResponse: (response) => {
+          const currentState = {
+            streamState: streamStateRef.current,
+            messageCount: messages.length,
+            isLoading,
+            response: {
+              ok: response.ok,
+              status: response.status,
+              contentType: response.headers.get('content-type')
+            }
+          };
 
-          if (usage) {
-            console.log('Token usage:', usage);
+          console.log('DEBUG: Response received:', currentState);
+          logger.debug('Response received:', { state: currentState, timestamp: new Date().toISOString() });
 
-            // You can now use the usage data as needed
+          if (!response.ok) {
+            const errorState = {
+              error: 'Response not OK',
+              status: response.status,
+              streamState: 'error'
+            };
+            console.log('DEBUG: Stream error:', errorState);
+            logger.debug('Stream error:', { ...errorState, timestamp: new Date().toISOString() });
+            streamStateRef.current = 'error';
+            setStreamState('error');
+            loadingRef.current = false;
+            return;
           }
 
-          logger.debug('Finished streaming');
+          const contentType = response.headers.get('content-type');
+          if (!contentType?.includes('text/event-stream')) {
+            const errorState = {
+              error: 'Invalid content type',
+              contentType,
+              streamState: 'error'
+            };
+            console.log('DEBUG: Stream error:', errorState);
+            logger.debug('Stream error:', { ...errorState, timestamp: new Date().toISOString() });
+            streamStateRef.current = 'error';
+            setStreamState('error');
+            loadingRef.current = false;
+            return;
+          }
+
+          // Force streaming state
+          streamStateRef.current = 'streaming';
+          setStreamState('streaming');
+          loadingRef.current = true;
+          
+          const streamingState = {
+            messageCount: messages.length,
+            streamState: 'streaming',
+            isLoading: true
+          };
+          
+          console.log('DEBUG: Started streaming:', streamingState);
+          logger.debug('Started streaming:', { ...streamingState, timestamp: new Date().toISOString() });
         },
-        initialMessages,
-        initialInput: Cookies.get(PROMPT_COOKIE_KEY) || '',
+        onFinish: () => {
+          const finishState = {
+            currentState: streamStateRef.current,
+            messageCount: messages.length,
+            isLoading
+          };
+          
+          console.log('DEBUG: Stream finished:', finishState);
+          logger.debug('Stream finished:', { state: finishState, timestamp: new Date().toISOString() });
+
+          // Keep streaming state until we're sure the message is complete
+          setTimeout(() => {
+            streamStateRef.current = 'completed';
+            setStreamState('completed');
+            loadingRef.current = false;
+
+            setTimeout(() => {
+              if (streamStateRef.current === 'completed') {
+                streamStateRef.current = 'idle';
+                setStreamState('idle');
+                console.log('DEBUG: Reset to idle state after completion');
+                logger.debug('Reset to idle state after completion', { timestamp: new Date().toISOString() });
+              }
+            }, 100);
+          }, 50);
+        },
+        onError: (error) => {
+          const errorState = {
+            error: error.message,
+            currentState: streamStateRef.current,
+            messageCount: messages.length,
+            isLoading
+          };
+          
+          console.log('DEBUG: Stream error:', errorState);
+          logger.debug('Stream error:', { state: errorState, timestamp: new Date().toISOString() });
+
+          streamStateRef.current = 'error';
+          setStreamState('error');
+          loadingRef.current = false;
+        }
       });
+
+    // Initialize streaming state when message is being sent
+    useEffect(() => {
+      if (isLoading) {
+        const loadingState = {
+          previousState: streamStateRef.current,
+          isLoading,
+          newState: 'streaming'
+        };
+        
+        console.log('DEBUG: Loading started, initializing streaming state:', loadingState);
+        logger.debug('Loading started:', { state: loadingState, timestamp: new Date().toISOString() });
+
+        // Force streaming state when loading starts
+        streamStateRef.current = 'streaming';
+        setStreamState('streaming');
+        loadingRef.current = true;
+      } else if (streamStateRef.current === 'streaming') {
+        // When loading ends, transition to completed
+        const completedState = {
+          previousState: streamStateRef.current,
+          isLoading,
+          newState: 'completed'
+        };
+        
+        console.log('DEBUG: Loading ended, transitioning to completed:', completedState);
+        logger.debug('Loading ended:', { state: completedState, timestamp: new Date().toISOString() });
+
+        streamStateRef.current = 'completed';
+        setStreamState('completed');
+        loadingRef.current = false;
+
+        // Reset to idle after a short delay
+        setTimeout(() => {
+          if (streamStateRef.current === 'completed') {
+            streamStateRef.current = 'idle';
+            setStreamState('idle');
+            console.log('DEBUG: Reset to idle state');
+            logger.debug('Reset to idle state', { timestamp: new Date().toISOString() });
+          }
+        }, 100);
+      }
+    }, [isLoading]);
+
+    // Track message count changes
+    useEffect(() => {
+      const messageState = {
+        messageCount: messages.length,
+        streamState: streamStateRef.current,
+        isLoading,
+        loadingRef: loadingRef.current
+      };
+      
+      console.log('DEBUG: Message count updated:', messageState);
+      logger.debug('Message count updated:', { state: messageState, timestamp: new Date().toISOString() });
+
+      if (messages.length > messageCountRef.current) {
+        streamStateRef.current = 'streaming';
+        setStreamState('streaming');
+        loadingRef.current = true;
+      }
+    }, [messages.length]);
+
     useEffect(() => {
       const prompt = searchParams.get('prompt');
-
-      // console.log(prompt, searchParams, model, provider);
 
       if (prompt) {
         setSearchParams({});
@@ -192,7 +337,7 @@ export const ChatImpl = memo(
               type: 'text',
               text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${prompt}`,
             },
-          ] as any, // Type assertion to bypass compiler check
+          ] as any,
         });
       }
     }, [model, provider, searchParams]);
@@ -207,6 +352,29 @@ export const ChatImpl = memo(
     }, []);
 
     useEffect(() => {
+      messageCountRef.current = messages.length;
+      const logData = {
+        messages: {
+          count: messages.length,
+          lastMessageRole: messages.length > 0 ? messages[messages.length - 1].role : null,
+          lastMessageContent: messages.length > 0 ? JSON.stringify(messages[messages.length - 1].content) : null,
+          allMessages: messages.map(m => ({
+            role: m.role,
+            contentPreview: typeof m.content === 'string' ? 
+              m.content.substring(0, 100) : 
+              JSON.stringify(m.content).substring(0, 100)
+          }))
+        },
+        state: {
+          isLoading,
+          streamState: streamStateRef.current,
+          loadingRef: loadingRef.current,
+          messageCount: messages.length,
+          timestamp: new Date().toISOString()
+        }
+      };
+      logger.debug(`Message state updated: ${JSON.stringify(logData, null, 2)}`);
+      
       processSampledMessages({
         messages,
         initialMessages,
@@ -224,10 +392,24 @@ export const ChatImpl = memo(
       }
     };
 
-    const abort = () => {
+    const handleStop = () => {
+      logger.debug('Stopping stream:', {
+        currentState: streamStateRef.current,
+        timestamp: new Date().toISOString()
+      });
+
       stop();
-      chatStore.setKey('aborted', true);
-      workbenchStore.abortAllActions();
+      streamStateRef.current = 'completed';
+      setStreamState('completed');
+      loadingRef.current = false;
+
+      setTimeout(() => {
+        if (streamStateRef.current === 'completed') {
+          streamStateRef.current = 'idle';
+          setStreamState('idle');
+          logger.debug('Reset to idle after stop');
+        }
+      }, 100);
     };
 
     useEffect(() => {
@@ -262,7 +444,6 @@ export const ChatImpl = memo(
         chatStore.setKey('started', true);
         setChatStarted(true);
       } catch (error) {
-        // If animation fails, still set chat as started
         console.warn('Animation failed, continuing without animation:', error);
         chatStore.setKey('started', true);
         setChatStarted(true);
@@ -273,7 +454,6 @@ export const ChatImpl = memo(
       if (!imageDataList.length) return '';
       
       try {
-        // Temporarily switch to GPT-4o for image transcription
         const gpt4oProvider = PROVIDER_LIST.find(p => p.name === 'OpenAI');
         if (!gpt4oProvider) throw new Error('OpenAI provider not found');
         
@@ -291,11 +471,9 @@ export const ChatImpl = memo(
           ] as any,
         });
 
-        // Wait for the assistant's response
         const response = messages[messages.length - 1];
         const transcription = typeof response.content === 'string' ? response.content : '';
         
-        // Remove the transcription messages from the chat
         setMessages(messages.slice(0, -2));
         
         return transcription;
@@ -310,192 +488,89 @@ export const ChatImpl = memo(
       const _input = messageInput || input;
 
       if (_input.length === 0 || isLoading) {
+        const blockReason = {
+          reason: _input.length === 0 ? 'empty input' : 'already loading'
+        };
+        
+        console.log('DEBUG: Message send blocked:', blockReason);
+        logger.debug('Message send blocked:', { ...blockReason, timestamp: new Date().toISOString() });
         return;
       }
 
-      await workbenchStore.saveAllFiles();
+      try {
+        const prepState = {
+          inputLength: _input.length,
+          currentState: streamStateRef.current
+        };
+        
+        console.log('DEBUG: Preparing to send message:', prepState);
+        logger.debug('Preparing to send message:', { state: prepState, timestamp: new Date().toISOString() });
 
-      if (error != null) {
-        setMessages(messages.slice(0, -1));
-      }
+        // Force streaming state before sending
+        streamStateRef.current = 'streaming';
+        setStreamState('streaming');
+        loadingRef.current = true;
 
-      const fileModifications = workbenchStore.getFileModifcations();
-      chatStore.setKey('aborted', false);
-      runAnimation();
+        await workbenchStore.saveAllFiles();
 
-      // Handle image transcription for o3-mini
-      let processedInput = _input;
-      if (model === 'o3-mini' && imageDataList.length > 0) {
-        const imageTranscription = await transcribeImagesWithGPT4o(imageDataList);
-        if (imageTranscription) {
-          processedInput = `${_input}\n\nContext from attached images:\n${imageTranscription}`;
+        if (error) {
+          setMessages(messages.slice(0, -1));
         }
-      }
 
-      if (!chatStarted && processedInput && autoSelectTemplate) {
-        setFakeLoading(true);
-        setMessages([
-          {
-            id: `${new Date().getTime()}`,
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${processedInput}`,
-              },
-              ...imageDataList.map((imageData) => ({
-                type: 'image',
-                image: imageData,
-              })),
-            ] as any, // Type assertion to bypass compiler check
-          },
-        ]);
-
-        // reload();
-
-        const { template, title } = await selectStarterTemplate({
-          message: processedInput,
-          model,
-          provider,
-        });
-
-        if (template !== 'blank') {
-          const temResp = await getTemplates(template, title).catch((e) => {
-            if (e.message.includes('rate limit')) {
-              toast.warning('Rate limit exceeded. Skipping starter template\n Continuing with blank template');
-            } else {
-              toast.warning('Failed to import starter template\n Continuing with blank template');
-            }
-
-            return null;
-          });
-
-          if (temResp) {
-            const { assistantMessage, userMessage } = temResp;
-
-            setMessages([
-              {
-                id: `${new Date().getTime()}`,
-                role: 'user',
-                content: processedInput,
-
-                // annotations: ['hidden'],
-              },
-              {
-                id: `${new Date().getTime()}`,
-                role: 'assistant',
-                content: assistantMessage,
-              },
-              {
-                id: `${new Date().getTime()}`,
-                role: 'user',
-                content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
-                annotations: ['hidden'],
-              },
-            ]);
-
-            reload();
-            setFakeLoading(false);
-
-            return;
-          } else {
-            setMessages([
-              {
-                id: `${new Date().getTime()}`,
-                role: 'user',
-                content: [
-                  {
-                    type: 'text',
-                    text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${processedInput}`,
-                  },
-                  ...imageDataList.map((imageData) => ({
-                    type: 'image',
-                    image: imageData,
-                  })),
-                ] as any, // Type assertion to bypass compiler check
-              },
-            ]);
-            reload();
-            setFakeLoading(false);
-
-            return;
-          }
-        } else {
-          setMessages([
-            {
-              id: `${new Date().getTime()}`,
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${processedInput}`,
-                },
-                ...imageDataList.map((imageData) => ({
-                  type: 'image',
-                  image: imageData,
-                })),
-              ] as any, // Type assertion to bypass compiler check
-            },
-          ]);
-          reload();
-          setFakeLoading(false);
-
-          return;
-        }
-      }
-
-      if (fileModifications !== undefined) {
-        append({
-          role: 'user',
+        const messageContent = {
+          role: 'user' as const,
           content: [
             {
               type: 'text',
-              text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${processedInput}`,
+              text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${_input}`,
             },
-            ...(model !== 'o3-mini' ? imageDataList.map(imageData => ({
-              type: 'image',
-              image: imageData,
-            })) : []),
           ] as any,
-        });
+          id: Date.now().toString()
+        };
 
-        workbenchStore.resetAllFileModifications();
-      } else {
-        append({
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${processedInput}`,
-            },
-            ...(model !== 'o3-mini' ? imageDataList.map(imageData => ({
-              type: 'image',
-              image: imageData,
-            })) : []),
-          ] as any,
-        });
+        const sendState = {
+          messageCount: messages.length + 1,
+          streamState: 'streaming',
+          isLoading: true
+        };
+        
+        console.log('DEBUG: Sending message:', sendState);
+        logger.debug('Sending message:', { state: sendState, timestamp: new Date().toISOString() });
+
+        // Ensure streaming state is set before appending message
+        streamStateRef.current = 'streaming';
+        setStreamState('streaming');
+        loadingRef.current = true;
+        messageCountRef.current = messages.length;
+
+        await append(messageContent);
+
+        setInput('');
+        Cookies.remove(PROMPT_COOKIE_KEY);
+        setUploadedFiles([]);
+        setImageDataList([]);
+        resetEnhancer();
+        textareaRef.current?.blur();
+
+      } catch (error) {
+        const errorState = {
+          error: error instanceof Error ? error.message : String(error)
+        };
+        
+        console.log('DEBUG: Error sending message:', errorState);
+        logger.error('Error sending message:', { ...errorState, timestamp: new Date().toISOString() });
+
+        streamStateRef.current = 'error';
+        setStreamState('error');
+        loadingRef.current = false;
+        toast.error(error instanceof Error ? error.message : String(error));
       }
-
-      setInput('');
-      Cookies.remove(PROMPT_COOKIE_KEY);
-      setUploadedFiles([]);
-      setImageDataList([]);
-      resetEnhancer();
-      textareaRef.current?.blur();
     };
 
-    /**
-     * Handles the change event for the textarea and updates the input state.
-     * @param event - The change event from the textarea.
-     */
     const onTextareaChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
       handleInputChange(event);
     };
 
-    /**
-     * Debounced function to cache the prompt in cookies.
-     * Caches the trimmed value of the textarea input after a delay to optimize performance.
-     */
     const debouncedCachePrompt = useCallback(
       debounce((event: React.ChangeEvent<HTMLTextAreaElement>) => {
         const trimmedValue = event.target.value.trim();
@@ -546,7 +621,7 @@ export const ChatImpl = memo(
           onTextareaChange(e);
           debouncedCachePrompt(e);
         }}
-        handleStop={abort}
+        handleStop={handleStop}
         description={description}
         importChat={importChat}
         exportChat={exportChat}

@@ -1,12 +1,15 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModelV1, LanguageModelV1Message, LanguageModelV1ProviderMetadata } from '@ai-sdk/provider';
 import { createOpenAI } from '@ai-sdk/openai';
+import { wrapLanguageModel } from '../stream-transformer';
 
 export default class XAIProvider extends BaseProvider {
-  name = 'xAI';
-  getApiKeyLink = 'https://docs.x.ai/docs/quickstart#creating-an-api-key';
+  name = 'XAI';
+  getApiKeyLink = 'https://xai.com/api-keys';
+  labelForGetApiKey = 'Get XAI API Key';
+  icon = '/images/providers/xai.svg';
 
   config = {
     apiTokenKey: 'XAI_API_KEY',
@@ -42,6 +45,7 @@ export default class XAIProvider extends BaseProvider {
       apiKey,
     });
 
-    return openai(model);
+    const xai = openai(model);
+    return wrapLanguageModel(xai);
   }
 }

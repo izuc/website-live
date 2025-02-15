@@ -49,6 +49,7 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
             const isFirst = index === 0;
             const isLast = index === messages.length - 1;
             const isHidden = annotations?.includes('hidden');
+            const isCurrentlyStreaming = isStreaming && isLast && !isUserMessage;
 
             if (isHidden) {
               return <Fragment key={index} />;
@@ -58,9 +59,9 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
               <div
                 key={index}
                 className={classNames('flex gap-4 p-6 w-full rounded-[calc(0.75rem-1px)]', {
-                  'bg-bolt-elements-messages-background': isUserMessage || !isStreaming || (isStreaming && !isLast),
+                  'bg-bolt-elements-messages-background': isUserMessage || !isCurrentlyStreaming,
                   'bg-gradient-to-b from-bolt-elements-messages-background from-30% to-transparent':
-                    isStreaming && isLast,
+                    isCurrentlyStreaming,
                   'mt-4': !isFirst,
                 })}
               >
@@ -69,14 +70,16 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
                     <div className="i-ph:user-fill text-xl"></div>
                   </div>
                 )}
-                <div className="grid grid-col-1 w-full">
+                <div className={classNames('grid grid-col-1 w-full', {
+                  'animate-pulse': isCurrentlyStreaming
+                })}>
                   {isUserMessage ? (
                     <UserMessage content={content} />
                   ) : (
                     <AssistantMessage content={content} annotations={message.annotations} />
                   )}
                 </div>
-                {!isUserMessage && (
+                {!isUserMessage && !isCurrentlyStreaming && (
                   <div className="flex gap-2 flex-col lg:flex-row">
                     {messageId && (
                       <WithTooltip tooltip="Revert to this message">

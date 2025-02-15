@@ -1,84 +1,61 @@
+import { type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { json } from '@remix-run/cloudflare';
 import { LLMManager } from '~/lib/modules/llm/manager';
-import type { ModelInfo } from '~/lib/modules/llm/types';
-import type { ProviderInfo } from '~/types/model';
+import type { ModelInfo, ProviderInfo } from '~/lib/modules/llm/types';
+import type { IProviderSetting } from '~/types/model';
 import { getApiKeysFromCookie, getProviderSettingsFromCookie } from '~/lib/api/cookies';
+import type { Env } from '~/lib/.server/llm/select-context';
 
 interface ModelsResponse {
-  modelList: ModelInfo[];
   providers: ProviderInfo[];
   defaultProvider: ProviderInfo;
+  modelList: ModelInfo[];
 }
 
-let cachedProviders: ProviderInfo[] | null = null;
-let cachedDefaultProvider: ProviderInfo | null = null;
+// Create a type that includes only the non-method properties of ProviderInfo
+type ProviderInfoBasic = Pick<ProviderInfo, 'name' | 'staticModels' | 'getApiKeyLink' | 'labelForGetApiKey' | 'icon'>;
 
-function getProviderInfo(llmManager: LLMManager) {
-  if (!cachedProviders) {
-    cachedProviders = llmManager.getAllProviders().map((provider) => ({
-      name: provider.name,
-      staticModels: provider.staticModels,
-      getApiKeyLink: provider.getApiKeyLink,
-      labelForGetApiKey: provider.labelForGetApiKey,
-      icon: provider.icon,
-    }));
-  }
-
-  if (!cachedDefaultProvider) {
-    const defaultProvider = llmManager.getDefaultProvider();
-    cachedDefaultProvider = {
-      name: defaultProvider.name,
-      staticModels: defaultProvider.staticModels,
-      getApiKeyLink: defaultProvider.getApiKeyLink,
-      labelForGetApiKey: defaultProvider.labelForGetApiKey,
-      icon: defaultProvider.icon,
-    };
-  }
-
-  return { providers: cachedProviders, defaultProvider: cachedDefaultProvider };
+// Helper function to convert basic provider info to full provider info
+function toProviderInfo(provider: ProviderInfoBasic): ProviderInfo {
+  return {
+    ...provider,
+    getModelInstance: () => { throw new Error('Not implemented'); },
+    getDynamicModels: async () => [],
+  };
 }
 
-export async function loader({
-  request,
-  params,
-}: {
-  request: Request;
-  params: { provider?: string };
-}): Promise<Response> {
-  const llmManager = LLMManager.getInstance(import.meta.env);
-
-  // Get client side maintained API keys and provider settings from cookies
+export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const cookieHeader = request.headers.get('Cookie');
   const apiKeys = getApiKeysFromCookie(cookieHeader);
   const providerSettings = getProviderSettingsFromCookie(cookieHeader);
+  const serverEnv = context.env as Env;
 
-  const { providers, defaultProvider } = getProviderInfo(llmManager);
+  const llmManager = LLMManager.getInstance();
 
-  let modelList: ModelInfo[] = [];
+  const providers = llmManager.getAllProviders().map(provider => ({
+    name: provider.name,
+    staticModels: provider.staticModels,
+    getApiKeyLink: provider.getApiKeyLink,
+    labelForGetApiKey: provider.labelForGetApiKey,
+    icon: provider.icon,
+  })).map(toProviderInfo);
 
-  if (params.provider) {
-    // Only update models for the specific provider
-    const provider = llmManager.getProvider(params.provider);
-
-    if (provider) {
-      const staticModels = provider.staticModels;
-      const dynamicModels = provider.getDynamicModels
-        ? await provider.getDynamicModels(apiKeys, providerSettings, import.meta.env)
-        : [];
-      modelList = [...staticModels, ...dynamicModels];
-    }
-  } else {
-    // Update all models
-    modelList = await llmManager.updateModelList({
-      apiKeys,
-      providerSettings,
-      serverEnv: import.meta.env,
-    });
+  const defaultProvider = providers[0];
+  if (!defaultProvider) {
+    throw new Error('No providers available');
   }
 
-  return json<ModelsResponse>({
-    modelList,
+  const modelList = await llmManager.updateModelList({
+    apiKeys,
+    providerSettings,
+    serverEnv,
+  });
+
+  const response: ModelsResponse = {
     providers,
     defaultProvider,
-  });
-}
+    modelList,
+  };
+
+  return json(response);
+};

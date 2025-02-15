@@ -6,43 +6,87 @@ import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROVIDER_LIST } from '~/utils/constant
 import { createFilesContext, extractCurrentContext, extractPropertiesFromMessage, simplifyBoltActions } from './utils';
 import { createScopedLogger } from '~/utils/logger';
 import { LLMManager } from '~/lib/modules/llm/manager';
+import type { Message as LocalMessage } from './utils';
+import { wrapLanguageModel } from '~/lib/modules/llm/stream-transformer';
+import type { LanguageModelV1, LanguageModelV1TextPart } from '@ai-sdk/provider';
+
+// Define Env type based on what we know is required
+export interface Env {
+  DEFAULT_NUM_CTX: string;
+  ANTHROPIC_API_KEY: string;
+  OPENAI_API_KEY: string;
+  GROQ_API_KEY: string;
+  HuggingFace_API_KEY: string;
+  OPEN_ROUTER_API_KEY: string;
+  OLLAMA_API_BASE_URL: string;
+  OPENAI_LIKE_API_KEY: string;
+  OPENAI_LIKE_API_BASE_URL: string;
+  TOGETHER_API_KEY: string;
+  TOGETHER_API_BASE_URL: string;
+  DEEPSEEK_API_KEY: string;
+  LMSTUDIO_API_BASE_URL: string;
+  GOOGLE_GENERATIVE_AI_API_KEY: string;
+  MISTRAL_API_KEY: string;
+  XAI_API_KEY: string;
+  PERPLEXITY_API_KEY: string;
+  AWS_BEDROCK_CONFIG: string;
+  [key: string]: string;
+}
 
 // Common patterns to ignore, similar to .gitignore
 
 const ig = ignore().add(IGNORE_PATTERNS);
 const logger = createScopedLogger('select-context');
 
-export async function selectContext(props: {
-  messages: Message[];
-  env?: Env;
-  apiKeys?: Record<string, string>;
-  files: FileMap;
-  providerSettings?: Record<string, IProviderSetting>;
+function isTextPart(part: any): part is LanguageModelV1TextPart {
+  return part && part.type === 'text' && typeof part.text === 'string';
+}
+
+interface GenerateTextResponse {
+  text: string;
+}
+
+function isGenerateTextResponse(response: any): response is GenerateTextResponse {
+  return typeof response === 'object' && typeof response.text === 'string';
+}
+
+export async function selectContext({
+  messages,
+  env,
+  apiKeys,
+  files = {},
+  providerSettings,
+  promptId,
+  contextOptimization = true,
+  summary,
+  onFinish,
+}: {
+  messages: LocalMessage[];
+  env: Env;
+  apiKeys: Record<string, string>;
+  providerSettings: Record<string, IProviderSetting>;
   promptId?: string;
+  files?: FileMap;
   contextOptimization?: boolean;
-  summary: string;
+  summary?: string;
   onFinish?: (resp: GenerateTextResult<Record<string, CoreTool<any, any>>, never>) => void;
-}) {
-  const { messages, env: serverEnv, apiKeys, files, providerSettings, contextOptimization, summary, onFinish } = props;
+}): Promise<{ files: FileMap; summary?: string }> {
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
+  
   const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
-      const { model, provider, content } = extractPropertiesFromMessage(message);
+      const { model, provider, content } = extractPropertiesFromMessage(message as LocalMessage);
       currentModel = model;
       currentProvider = provider;
-
       return { ...message, content };
-    } else if (message.role == 'assistant') {
+    } else if (message.role === 'assistant') {
       let content = message.content;
-
       if (contextOptimization) {
-        content = simplifyBoltActions(content);
+        content = typeof content === 'string' ? simplifyBoltActions(content) : content;
       }
-
       return { ...message, content };
     }
-
     return message;
   });
 
@@ -56,7 +100,7 @@ export async function selectContext(props: {
       ...(await LLMManager.getInstance().getModelListFromProvider(provider, {
         apiKeys,
         providerSettings,
-        serverEnv: serverEnv as any,
+        serverEnv: env,
       })),
     ];
 
@@ -67,7 +111,6 @@ export async function selectContext(props: {
     modelDetails = modelsList.find((m) => m.name === currentModel);
 
     if (!modelDetails) {
-      // Fallback to first model
       logger.warn(
         `MODEL [${currentModel}] not found in provider [${provider.name}]. Falling back to first model. ${modelsList[0].name}`,
       );
@@ -75,151 +118,75 @@ export async function selectContext(props: {
     }
   }
 
-  const { codeContext } = extractCurrentContext(processedMessages);
-
-  let filePaths = getFilePaths(files || {});
-  filePaths = filePaths.filter((x) => {
-    const relPath = x.replace('/home/project/', '');
-    return !ig.ignores(relPath);
+  const model = provider.getModelInstance({
+    model: currentModel,
+    serverEnv: env,
+    apiKeys,
+    providerSettings,
   });
 
-  let context = '';
-  const currrentFiles: string[] = [];
-  const contextFiles: FileMap = {};
+  const wrappedModel = wrapLanguageModel(model);
 
-  if (codeContext?.type === 'codeContext') {
-    const codeContextFiles: string[] = codeContext.files;
-    Object.keys(files || {}).forEach((path) => {
-      let relativePath = path;
-
-      if (path.startsWith('/home/project/')) {
-        relativePath = path.replace('/home/project/', '');
-      }
-
-      if (codeContextFiles.includes(relativePath)) {
-        contextFiles[relativePath] = files[path];
-        currrentFiles.push(relativePath);
-      }
-    });
-    context = createFilesContext(contextFiles);
-  }
-
-  const summaryText = `Here is the summary of the chat till now: ${summary}`;
-
-  const extractTextContent = (message: Message) =>
-    Array.isArray(message.content)
-      ? (message.content.find((item) => item.type === 'text')?.text as string) || ''
-      : message.content;
-
-  const lastUserMessage = processedMessages.filter((x) => x.role == 'user').pop();
-
-  if (!lastUserMessage) {
-    throw new Error('No user message found');
-  }
-
-  // select files from the list of code file from the project that might be useful for the current request from the user
-  const resp = await generateText({
+  const resp = await (generateText as any)({
     system: `
-        You are a software engineer. You are working on a project. You have access to the following files:
-
-        AVAILABLE FILES PATHS
-        ---
-        ${filePaths.map((path) => `- ${path}`).join('\n')}
-        ---
-        
-        You have following code loaded in the context buffer that you can refer to:
-
-        CURRENT CONTEXT BUFFER
-        ---
-        ${context}
-        ---
-
-        Now, you are given a task. You need to select the files that are relevant to the task from the list of files above.
-
-        RESPONSE FORMAT:
-        your response shoudl be in following format:
----
-<updateContextBuffer>
-    <includeFile path="path/to/file"/>
-    <excludeFile path="path/to/file"/>
-</updateContextBuffer>
----
-        * Your should start with <updateContextBuffer> and end with </updateContextBuffer>. 
-        * You can include multiple <includeFile> and <excludeFile> tags in the response.
-        * You should not include any other text in the response.
-        * You should not include any file that is not in the list of files above.
-        * You should not include any file that is already in the context buffer.
-        * If no changes are needed, you can leave the response empty updateContextBuffer tag.
-        `,
+      You are a software engineer. You are working on a project. You need to select files from the list of code file from the project that might be useful for the current request from the user.
+      
+      ${summary ? `Below is the Chat Summary till now:\n${summary}` : ''}
+      
+      RULES:
+      * Only select files that are relevant to the current request.
+      * Do not select files that are not relevant.
+      * Do not select files that are not in the list.
+      * Do not select files that are not code files.
+      * Do not select files that are not in the project.
+      * Do not select files that are not in the codebase.
+      * Do not select files that are not in the repository.
+      `,
     prompt: `
-        ${summaryText}
-
-        Users Question: ${extractTextContent(lastUserMessage)}
-
-        update the context buffer with the files that are relevant to the task from the list of files above.
-
-        CRITICAL RULES:
-        * Only include relevant files in the context buffer.
-        * context buffer should not include any file that is not in the list of files above.
-        * context buffer is extremlly expensive, so only include files that are absolutely necessary.
-        * If no changes are needed, you can leave the response empty updateContextBuffer tag.
-        * Only 5 files can be placed in the context buffer at a time.
-        * if the buffer is full, you need to exclude files that is not needed and include files that is relevent.
-
-        `,
-    model: provider.getModelInstance({
+      Below is the list of files in the project:
+      ${Object.keys(files)
+        .map((path: string) => `- ${path}`)
+        .join('\n')}
+      
+      Below is the chat history:
+      ${processedMessages
+        .map((message: LocalMessage) => {
+          const content = Array.isArray(message.content)
+            ? message.content.find(isTextPart)?.text || ''
+            : message.content;
+          return `---\n[${message.role}] ${content}\n---`;
+        })
+        .join('\n')}
+      
+      Please select files that might be useful for the current request.
+      `,
+    model: wrapLanguageModel(provider.getModelInstance({
       model: currentModel,
-      serverEnv,
+      serverEnv: env,
       apiKeys,
       providerSettings,
-    }),
+    })),
   });
 
-  const response = resp.text;
-  const updateContextBuffer = response.match(/<updateContextBuffer>([\s\S]*?)<\/updateContextBuffer>/);
-
-  if (!updateContextBuffer) {
-    throw new Error('Invalid response. Please follow the response format');
+  if (!isGenerateTextResponse(resp)) {
+    throw new Error('Unexpected response format from generateText');
   }
 
-  const includeFiles =
-    updateContextBuffer[1]
-      .match(/<includeFile path="(.*?)"/gm)
-      ?.map((x) => x.replace('<includeFile path="', '').replace('"', '')) || [];
-  const excludeFiles =
-    updateContextBuffer[1]
-      .match(/<excludeFile path="(.*?)"/gm)
-      ?.map((x) => x.replace('<excludeFile path="', '').replace('"', '')) || [];
+  const selectedFiles = resp.text
+    .split('\n')
+    .filter((line: string) => line.trim().startsWith('-'))
+    .map((line: string) => line.trim().replace(/^-\s*/, ''))
+    .filter((path: string) => Object.keys(files).includes(path));
 
-  const filteredFiles: FileMap = {};
-  excludeFiles.forEach((path) => {
-    delete contextFiles[path];
-  });
-  includeFiles.forEach((path) => {
-    let fullPath = path;
-
-    if (!path.startsWith('/home/project/')) {
-      fullPath = `/home/project/${path}`;
-    }
-
-    if (!filePaths.includes(fullPath)) {
-      throw new Error(`File ${path} is not in the list of files above.`);
-    }
-
-    if (currrentFiles.includes(path)) {
-      return;
-    }
-
-    filteredFiles[path] = files[fullPath];
-  });
+  const filteredFiles = Object.fromEntries(
+    Object.entries(files).filter(([key]) => selectedFiles.includes(key))
+  );
 
   if (onFinish) {
-    onFinish(resp);
+    onFinish(resp as any);
   }
 
-  return filteredFiles;
-
-  // generateText({
+  return { files: filteredFiles, summary: resp.text };
 }
 
 export function getFilePaths(files: FileMap) {

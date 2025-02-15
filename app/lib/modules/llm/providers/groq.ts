@@ -1,12 +1,14 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModelV1 } from '@ai-sdk/provider';
 import { createOpenAI } from '@ai-sdk/openai';
 
 export default class GroqProvider extends BaseProvider {
   name = 'Groq';
   getApiKeyLink = 'https://console.groq.com/keys';
+  labelForGetApiKey = 'Get Groq API Key';
+  icon = '/images/providers/groq.svg';
 
   config = {
     apiTokenKey: 'GROQ_API_KEY',

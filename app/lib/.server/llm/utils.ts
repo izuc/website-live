@@ -1,45 +1,98 @@
-import { type Message } from 'ai';
+import type {
+  LanguageModelV1,
+  LanguageModelV1Message,
+  LanguageModelV1ProviderMetadata,
+  LanguageModelV1TextPart,
+  LanguageModelV1ImagePart,
+  LanguageModelV1FilePart,
+  LanguageModelV1ToolCallPart,
+  LanguageModelV1ToolResultPart
+} from '@ai-sdk/provider';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, MODEL_REGEX, PROVIDER_REGEX } from '~/utils/constants';
 import { IGNORE_PATTERNS, type FileMap } from './constants';
 import ignore from 'ignore';
 import type { ContextAnnotation } from '~/types/context';
+
+// Define base message properties
+export interface BaseMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | Array<LanguageModelV1TextPart | LanguageModelV1ToolCallPart | LanguageModelV1ToolResultPart>;
+  id: string;
+  providerMetadata?: LanguageModelV1ProviderMetadata;
+  annotations?: Array<{
+    type: string;
+    [key: string]: any;
+  }>;
+}
+
+// Define specific message types
+export interface SystemMessage extends BaseMessage {
+  role: 'system';
+}
+
+export interface UserMessage extends BaseMessage {
+  role: 'user';
+}
+
+export interface AssistantMessage extends BaseMessage {
+  role: 'assistant';
+}
+
+export interface ToolMessage extends BaseMessage {
+  role: 'tool';
+}
+
+// Union type for all message types
+export type Message = SystemMessage | UserMessage | AssistantMessage | ToolMessage;
+
+// Helper function to convert to LanguageModelV1Message
+export function toLanguageModelV1Message(message: Message): LanguageModelV1Message {
+  const { role, content, providerMetadata } = message;
+  
+  if (typeof content === 'string') {
+    return {
+      role,
+      content: [{
+        type: 'text',
+        text: content
+      }],
+      providerMetadata
+    } as LanguageModelV1Message;
+  }
+  
+  return {
+    role,
+    content,
+    providerMetadata
+  } as LanguageModelV1Message;
+}
+
+function isTextPart(item: LanguageModelV1TextPart | LanguageModelV1ImagePart | LanguageModelV1FilePart | LanguageModelV1ToolCallPart | LanguageModelV1ToolResultPart): item is LanguageModelV1TextPart {
+  return item.type === 'text' && 'text' in item;
+}
 
 export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
   model: string;
   provider: string;
   content: string;
 } {
-  const textContent = Array.isArray(message.content)
-    ? message.content.find((item) => item.type === 'text')?.text || ''
-    : message.content;
+  let textContent = '';
+  
+  if (Array.isArray(message.content)) {
+    const parts = message.content as (LanguageModelV1TextPart | LanguageModelV1ImagePart | LanguageModelV1FilePart | LanguageModelV1ToolCallPart | LanguageModelV1ToolResultPart)[];
+    const textPart = parts.find(isTextPart);
+    textContent = textPart?.text || '';
+  } else {
+    textContent = message.content as string;
+  }
 
   const modelMatch = textContent.match(MODEL_REGEX);
   const providerMatch = textContent.match(PROVIDER_REGEX);
 
-  /*
-   * Extract model
-   * const modelMatch = message.content.match(MODEL_REGEX);
-   */
-  const model = modelMatch ? modelMatch[1] : DEFAULT_MODEL;
+  const model = modelMatch?.[1] || DEFAULT_MODEL;
+  const provider = providerMatch?.[1] || DEFAULT_PROVIDER.name;
 
-  /*
-   * Extract provider
-   * const providerMatch = message.content.match(PROVIDER_REGEX);
-   */
-  const provider = providerMatch ? providerMatch[1] : DEFAULT_PROVIDER.name;
-
-  const cleanedContent = Array.isArray(message.content)
-    ? message.content.map((item) => {
-        if (item.type === 'text') {
-          return {
-            type: 'text',
-            text: item.text?.replace(MODEL_REGEX, '').replace(PROVIDER_REGEX, ''),
-          };
-        }
-
-        return item; // Preserve image_url and other types as is
-      })
-    : textContent.replace(MODEL_REGEX, '').replace(PROVIDER_REGEX, '');
+  const cleanedContent = textContent.replace(MODEL_REGEX, '').replace(PROVIDER_REGEX, '');
 
   return { model, provider, content: cleanedContent };
 }

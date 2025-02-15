@@ -1,30 +1,32 @@
 import { BaseProvider, getOpenAILikeModel } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModelV1, LanguageModelV1Message, LanguageModelV1ProviderMetadata } from '@ai-sdk/provider';
+import { wrapLanguageModel } from '../stream-transformer';
 
 export default class OpenAILikeProvider extends BaseProvider {
-  name = 'OpenAILike';
-  getApiKeyLink = undefined;
+  name = 'OpenAI-Like';
+  getApiKeyLink = 'https://platform.openai.com/api-keys';
+  labelForGetApiKey = 'Get OpenAI API Key';
+  icon = 'i-ph:brain';
 
   config = {
-    baseUrlKey: 'OPENAI_LIKE_API_BASE_URL',
-    apiTokenKey: 'OPENAI_LIKE_API_KEY',
+    apiTokenKey: 'OPENAI_API_KEY',
   };
 
   staticModels: ModelInfo[] = [];
 
   async getDynamicModels(
+    serverEnv: Env,
     apiKeys?: Record<string, string>,
-    settings?: IProviderSetting,
-    serverEnv: Record<string, string> = {},
+    providerSettings?: Record<string, IProviderSetting>,
   ): Promise<ModelInfo[]> {
     const { baseUrl, apiKey } = this.getProviderBaseUrlAndKey({
       apiKeys,
-      providerSettings: settings,
+      providerSettings,
       serverEnv,
-      defaultBaseUrlKey: 'OPENAI_LIKE_API_BASE_URL',
-      defaultApiTokenKey: 'OPENAI_LIKE_API_KEY',
+      defaultBaseUrlKey: '',
+      defaultApiTokenKey: 'OPENAI_API_KEY',
     });
 
     if (!baseUrl || !apiKey) {
@@ -47,14 +49,17 @@ export default class OpenAILikeProvider extends BaseProvider {
     }));
   }
 
-  getModelInstance(options: {
+  getModelInstance({
+    model,
+    serverEnv,
+    apiKeys,
+    providerSettings,
+  }: {
     model: string;
-    serverEnv: Env;
+    serverEnv?: Env;
     apiKeys?: Record<string, string>;
     providerSettings?: Record<string, IProviderSetting>;
   }): LanguageModelV1 {
-    const { model, serverEnv, apiKeys, providerSettings } = options;
-
     const { baseUrl, apiKey } = this.getProviderBaseUrlAndKey({
       apiKeys,
       providerSettings: providerSettings?.[this.name],
@@ -67,6 +72,7 @@ export default class OpenAILikeProvider extends BaseProvider {
       throw new Error(`Missing configuration for ${this.name} provider`);
     }
 
-    return getOpenAILikeModel(baseUrl, apiKey, model);
+    const openai = getOpenAILikeModel(baseUrl, apiKey, model);
+    return wrapLanguageModel(openai);
   }
 }

@@ -8,8 +8,13 @@ export interface IProviderSetting {
   apiKey?: string;
   models?: string[];
   defaultModel?: string;
+  enabled?: boolean;
 }
 
-export type IProviderConfig = LLMProviderInfo & {
+// Create a type that omits the methods from ProviderInfo
+type ProviderInfoWithoutMethods = Omit<LLMProviderInfo, 'getModelInstance' | 'getDynamicModels' | 'getModelsFromCache' | 'storeDynamicModels'>;
+
+// IProviderConfig now only requires the non-method properties
+export interface IProviderConfig extends ProviderInfoWithoutMethods {
   settings: IProviderSetting;
-};
+}

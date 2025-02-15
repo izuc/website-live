@@ -1,12 +1,14 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModelV1 } from '@ai-sdk/provider';
 import { createOpenAI } from '@ai-sdk/openai';
 
 export default class GithubProvider extends BaseProvider {
-  name = 'Github';
-  getApiKeyLink = 'https://github.com/settings/personal-access-tokens';
+  name = 'GitHub';
+  getApiKeyLink = 'https://github.com/settings/tokens';
+  labelForGetApiKey = 'Get GitHub API Key';
+  icon = '/images/providers/github.svg';
 
   config = {
     apiTokenKey: 'GITHUB_API_KEY',
